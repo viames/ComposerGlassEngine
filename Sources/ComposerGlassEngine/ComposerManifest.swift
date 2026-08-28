@@ -163,6 +163,12 @@ public enum ComposerPackageName {
 
 public enum ComposerPlatformPackage {
   public static func isPlatformName(_ value: String) -> Bool {
+    // Composer package names always contain a vendor separator. Prefixes such
+    // as `php-http/` belong to regular packages, not to the PHP platform.
+    guard !value.contains("/") else {
+      return false
+    }
+
     if value == "php" || value == "hhvm" || value == "composer" || value == "composer-plugin-api"
       || value == "composer-runtime-api"
     {

@@ -3,6 +3,11 @@
 ComposerGlass Engine uses semantic versioning for its own API. Until version
 `1.0.0`, source compatibility may change between minor releases.
 
+The current behavioral reference is Composer `2.10.2`, tag `2.10.2`, commit
+`8d4439f572a97670a9edc039eb3b093cc976b4bc`. The reference is versioned in
+`COMPOSER-UPSTREAM.json` and exposed by `ComposerUpstreamReference.current`.
+See `COMPOSER-UPSTREAM.md` for the required comparison workflow.
+
 ## Implemented
 
 | Area | Status |
@@ -25,28 +30,42 @@ ComposerGlass Engine uses semantic versioning for its own API. Until version
 | `composer/2.0` metadata expansion | Implemented |
 | `available-packages` and wildcard filtering | Implemented |
 | `Last-Modified` revalidation and in-memory fallback | Implemented |
+| Concurrent loading and persistent repository metadata cache | Implemented |
 | HTTPS-only native repository transport | Implemented |
 | Numeric root and transitive `require` resolution | Implemented |
 | Deterministic highest-compatible backtracking | Implemented |
+| Branch aliases and development branch resolution | Implemented |
+| `conflict`, `replace`, `provide`, and provided virtual packages | Implemented |
 | Platform-package requirement validation | Implemented |
 | `minimum-stability`, root stability flags, and `prefer-stable` | Implemented |
 | Structured dependency-resolution problems | Implemented |
+| HTTPS-only ZIP distribution download | Implemented |
+| Composer SHA-1 and local SHA-256 archive verification | Implemented |
+| Persistent verified package archive cache | Implemented |
+| Configurable in-flight archive-size limit | Implemented |
+| Stored and DEFLATE ZIP extraction | Implemented |
+| CRC-32 validation and automatic extraction rollback | Implemented |
+| ZIP path, symlink, collision, and expansion protection | Implemented |
+| Deterministic new-vendor tree materialization | Implemented |
+| `vendor/composer/installed.json` generation | Implemented |
+| Failed new-vendor cleanup | Implemented |
+| Transactional `vendor` activation, recovery, and rollback | Implemented |
+| PSR-0, PSR-4, files, and classmap autoloading | Implemented |
+| `vendor/bin` proxy generation | Implemented |
+| Deterministic lock generation | Implemented |
+| Native install from `composer.lock` | Implemented |
+| Native update, selected update, `require`, and `remove` | Implemented |
+| Project mutation backup, recovery, and rollback | Implemented |
+| Native validate, show, and outdated inspection | Implemented |
+| Packagist security advisory audit | Implemented |
+| Native dump-autoload maintenance | Implemented |
 
 ## Planned
 
 | Area | Status |
 | --- | --- |
-| Persistent repository metadata cache | Planned |
 | Composer 1 provider/include repository protocol | Planned |
-| Branch aliases and development branch resolution | Planned |
-| `conflict`, `replace`, `provide`, and provided virtual packages | Planned |
 | Full Composer SAT solver equivalence | Planned |
-| Package download and cache | Planned |
-| ZIP extraction | Planned |
-| Transactional installation | Planned |
-| PSR-0, PSR-4, files, and classmap autoloading | Planned |
-| `vendor/bin` proxy generation | Planned |
-| Security advisory audit | Planned |
 
 ## Intentionally unsupported in the App Store profile
 

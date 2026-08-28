@@ -6,6 +6,11 @@ ComposerGlass Engine is an independent, unofficial Composer-compatible
 dependency engine written in Swift. It is not affiliated with or endorsed by
 the Composer project.
 
+The current behavioral baseline is Composer `2.10.2`, tag `2.10.2`, commit
+`8d4439f572a97670a9edc039eb3b093cc976b4bc`. See
+[COMPOSER-UPSTREAM.md](COMPOSER-UPSTREAM.md) for the machine-readable reference
+and the future-release comparison workflow.
+
 The package is being built for native developer tools that need to inspect,
 resolve, and install PHP dependencies without launching PHP, Composer, a shell,
 or another executable. The initial `0.x` releases intentionally implement a
@@ -28,10 +33,26 @@ safe subset of Composer and never execute downloaded package code.
 - HTTPS-only repository and redirect validation in the App Store-safe client.
 - Deterministic highest-compatible dependency resolution with transitive
   requirements and backtracking.
+- Branch aliases, development versions, `conflict`, `replace`, `provide`, and
+  virtual-package provider discovery.
 - PHP, extension, library, and Composer platform-package validation.
 - `minimum-stability`, root stability flags, and `prefer-stable` selection.
 - Structured resolution problems with contributing constraints and available
   repository versions.
+- Asynchronous HTTPS-only ZIP downloads with in-flight size enforcement.
+- Persistent package archive caching with SHA-256 validation and optional
+  Composer SHA-1 verification.
+- Native stored/DEFLATE ZIP extraction with CRC-32 validation, path containment,
+  expansion limits, and rollback on failure.
+- Deterministic materialization of new vendor trees with installed-package
+  metadata and all-or-nothing cleanup on failure.
+- PSR-0, PSR-4, classmap, and files autoload generation, plus deterministic
+  `vendor/bin` proxy generation.
+- Transactional active-vendor replacement with journaled recovery and rollback.
+- Deterministic lock generation and native update, selected update, `require`,
+  and `remove` workflows with project-file backups.
+- Native `install`, `validate`, `show`, `outdated`, `audit`, and
+  `dump-autoload` services.
 - A dependency-free Swift Package suitable for static linking.
 
 See [COMPATIBILITY.md](COMPATIBILITY.md) before using the package for project
@@ -45,6 +66,7 @@ modifications.
 ## Usage
 
 ```swift
+import Foundation
 import ComposerGlassEngine
 
 let manifest = try ComposerManifest.decode(from: manifestData)
@@ -74,15 +96,41 @@ if let repositoryURL = URL(string: "https://repo.packagist.org") {
     let result = try await resolver.resolve(
         requirements: ["psr/log": "^3.0"]
     )
+
+    if !result.packages.isEmpty,
+       let caches = FileManager.default.urls(
+           for: .cachesDirectory,
+           in: .userDomainMask
+       ).first {
+        let downloader = try ComposerPackageDownloader(
+            cacheDirectory: caches.appendingPathComponent("ComposerGlassEngine")
+        )
+        let materializer = ComposerPackageMaterializer(downloader: downloader)
+        let materialized = try await materializer.materialize(
+            result,
+            at: caches.appendingPathComponent(
+                "ComposerGlassEngine-Vendor-\(UUID().uuidString)"
+            )
+        )
+    }
 }
 ```
 
-The `0.4` resolver supports numeric package versions, root and transitive
-`require` constraints, platform packages, stability selection, cycles, and
-deterministic backtracking. Branch aliases, `conflict`, the `replace` and
-`provide` mechanisms—including provided virtual packages—and full Composer SAT
-equivalence remain outside this release; unsupported versions are never
-silently installed.
+The resolver supports numeric and development package versions, root and
+transitive `require` constraints, platform packages, stability selection,
+cycles, deterministic backtracking, branch aliases, conflicts, replacements,
+and virtual providers. Full Composer SAT equivalence remains outside this
+release; unsupported constraints are never silently accepted.
+
+The downloader and extractor currently accept ZIP distributions containing
+stored or DEFLATE entries. Cached content is verified before reuse; extraction
+rejects unsafe paths, symbolic links, encrypted entries, duplicates, collisions,
+and configured expansion limits. Package code is never executed.
+
+The high-level native services install into a staging directory, generate
+autoload metadata and binary proxies, then activate `vendor` transactionally.
+Mutating dependency operations also journal `composer.json` and `composer.lock`
+so an interrupted operation can be recovered or rolled back.
 
 ## Development
 

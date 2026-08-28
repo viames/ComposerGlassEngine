@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "engineVersion": "0.1.0",
+  "verifiedOn": "2026-08-27",
+  "compatibilityProfile": "app-store-safe-native-subset",
+  "composer": {
+    "version": "2.10.2",
+    "releaseDate": "2026-07-01",
+    "tag": "2.10.2",
+    "commit": "8d4439f572a97670a9edc039eb3b093cc976b4bc",
+    "repositoryURL": "https://github.com/composer/composer",
+    "releaseURL": "https://github.com/composer/composer/releases/tag/2.10.2",
+    "changelogURL": "https://github.com/composer/composer/blob/2.10.2/CHANGELOG.md"
+  },
+  "implementedAreas": [
+    "autoload-generation",
+    "audit",
+    "dependency-resolution",
+    "distribution-download-and-extraction",
+    "install",
+    "lock-generation",
+    "manifest-and-lock-formats",
+    "packagist-v2-metadata",
+    "platform-packages",
+    "require-and-remove",
+    "update-all-and-selected",
+    "validate-show-and-outdated",
+    "version-and-constraint-semantics"
+  ],
+  "intentionallyUnsupportedAreas": [
+    "artifact-repositories",
+    "composer-self-update",
+    "path-repositories",
+    "plugin-execution",
+    "script-execution",
+    "source-installations"
+  ]
+}

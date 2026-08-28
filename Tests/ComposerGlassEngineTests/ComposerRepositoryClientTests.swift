@@ -164,6 +164,70 @@ struct ComposerRepositoryClientTests {
     )
   }
 
+  @Test("Fresh metadata can be reused without another network request")
+  func reusesFreshCachedMetadata() async throws {
+    let transport = StubRepositoryTransport(responses: [
+      repositoryResponse(
+        #"{"metadata-url":"/p2/%package%.json"}"#,
+        url: "https://repo.example.test/packages.json"
+      ),
+      repositoryResponse(
+        #"{"packages":{"vendor/package":[{"name":"vendor/package","version":"1.0.0"}]}}"#,
+        url: "https://repo.example.test/p2/vendor/package.json"
+      ),
+    ])
+    let client = try ComposerRepositoryClient(
+      repositoryURL: #require(URL(string: "https://repo.example.test")),
+      transport: transport,
+      metadataCacheValidityInterval: 300
+    )
+
+    _ = try await client.packages(named: "vendor/package")
+    let cachedPackages = try await client.packages(named: "vendor/package")
+
+    #expect(cachedPackages.map(\.version) == ["1.0.0"])
+    #expect(await transport.recordedRequests().count == 2)
+  }
+
+  @Test("Fresh metadata persists across repository client instances")
+  func persistsFreshMetadata() async throws {
+    let cache = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "ComposerRepositoryClientTests-" + UUID().uuidString,
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: cache) }
+    let index = repositoryResponse(
+      #"{"metadata-url":"/p2/%package%.json"}"#,
+      url: "https://repo.example.test/packages.json"
+    )
+    let firstTransport = StubRepositoryTransport(responses: [
+      index,
+      repositoryResponse(
+        #"{"packages":{"vendor/package":[{"name":"vendor/package","version":"1.0.0"}]}}"#,
+        url: "https://repo.example.test/p2/vendor/package.json"
+      ),
+    ])
+    let first = try ComposerRepositoryClient(
+      repositoryURL: #require(URL(string: "https://repo.example.test")),
+      transport: firstTransport,
+      metadataCacheValidityInterval: 300,
+      cacheDirectoryURL: cache
+    )
+    _ = try await first.packages(named: "vendor/package")
+
+    let secondTransport = StubRepositoryTransport(responses: [index])
+    let second = try ComposerRepositoryClient(
+      repositoryURL: #require(URL(string: "https://repo.example.test")),
+      transport: secondTransport,
+      metadataCacheValidityInterval: 300,
+      cacheDirectoryURL: cache
+    )
+    let packages = try await second.packages(named: "vendor/package")
+
+    #expect(packages.map(\.version) == ["1.0.0"])
+    #expect(await secondTransport.recordedRequests().count == 1)
+  }
+
   @Test("Development metadata uses the Composer tilde-dev endpoint")
   func loadsDevelopmentVersions() async throws {
     let transport = StubRepositoryTransport(responses: [

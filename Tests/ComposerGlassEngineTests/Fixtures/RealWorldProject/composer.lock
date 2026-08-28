@@ -1,0 +1,89 @@
+{
+  "_readme": [
+    "This file locks the dependencies of your project to a known state."
+  ],
+  "content-hash": "00000000000000000000000000000000",
+  "packages": [
+    {
+      "name": "psr/log",
+      "version": "3.0.2",
+      "type": "library",
+      "require": {
+        "php": ">=8.0.0"
+      },
+      "autoload": {
+        "psr-4": {
+          "Psr\\Log\\": "src"
+        }
+      },
+      "dist": {
+        "type": "zip",
+        "url": "https://api.github.com/repos/php-fig/log/zipball/f16e1d586d7ffbe2f14f53f911d4a3c8faaa621e",
+        "reference": "f16e1d586d7ffbe2f14f53f911d4a3c8faaa621e",
+        "shasum": ""
+      },
+      "license": ["MIT"],
+      "description": "Common interface for logging libraries"
+    },
+    {
+      "name": "symfony/console",
+      "version": "v7.3.2",
+      "type": "library",
+      "require": {
+        "php": ">=8.2",
+        "symfony/string": "^6.4|^7.0"
+      },
+      "autoload": {
+        "psr-4": {
+          "Symfony\\Component\\Console\\": ""
+        }
+      },
+      "license": ["MIT"],
+      "description": "Eases the creation of beautiful and testable command line interfaces"
+    },
+    {
+      "name": "symfony/string",
+      "version": "v7.3.2",
+      "type": "library",
+      "require": {
+        "php": ">=8.2"
+      },
+      "autoload": {
+        "psr-4": {
+          "Symfony\\Component\\String\\": ""
+        }
+      },
+      "license": ["MIT"],
+      "description": "Provides an object-oriented API to strings"
+    }
+  ],
+  "packages-dev": [
+    {
+      "name": "phpunit/phpunit",
+      "version": "11.5.27",
+      "type": "library",
+      "require": {
+        "php": ">=8.2"
+      },
+      "bin": ["phpunit"],
+      "autoload": {
+        "classmap": ["src/"]
+      },
+      "license": ["BSD-3-Clause"],
+      "description": "The PHP Unit Testing framework"
+    }
+  ],
+  "aliases": [],
+  "minimum-stability": "stable",
+  "stability-flags": {},
+  "prefer-stable": true,
+  "prefer-lowest": false,
+  "platform": {
+    "php": "^8.2"
+  },
+  "platform-dev": {},
+  "platform-overrides": {
+    "php": "8.4.1"
+  },
+  "plugin-api-version": "2.6.0"
+}

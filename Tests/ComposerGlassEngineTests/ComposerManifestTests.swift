@@ -48,6 +48,7 @@ struct ComposerManifestTests {
   @Test(arguments: [
     "vendor/package",
     "vendor/package--name",
+    "php-http/discovery",
     "php",
     "ext-json",
     "composer-runtime-api",
@@ -67,5 +68,15 @@ struct ComposerManifestTests {
   ])
   func rejectsInvalidPackageNames(_ value: String) {
     #expect(!ComposerPackageName.isValid(value))
+  }
+
+  @Test("Namespaced packages with platform-like prefixes remain regular packages")
+  func doesNotMisclassifyNamespacedPackagesAsPlatformPackages() {
+    #expect(!ComposerPlatformPackage.isPlatformName("php-http/discovery"))
+    #expect(!ComposerPlatformPackage.isPlatformName("ext-example/package"))
+    #expect(!ComposerPlatformPackage.isPlatformName("lib-example/package"))
+    #expect(ComposerPlatformPackage.isPlatformName("php-64bit"))
+    #expect(ComposerPlatformPackage.isPlatformName("ext-json"))
+    #expect(ComposerPlatformPackage.isPlatformName("lib-curl"))
   }
 }

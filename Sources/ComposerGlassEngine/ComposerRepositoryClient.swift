@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 public struct ComposerHTTPResponse: Sendable {
@@ -57,21 +58,27 @@ public struct URLSessionComposerRepositoryTransport: ComposerRepositoryTransport
 }
 
 public actor ComposerRepositoryClient {
-  private struct CachedDocument: Sendable {
+  private struct CachedDocument: Codable, Sendable {
     let data: Data
     let lastModified: String?
+    let storedAt: Date
   }
 
   private let repositoryURL: URL
   private let packagesJSONURL: URL
   private let transport: any ComposerRepositoryTransport
+  private let metadataCacheValidityInterval: TimeInterval
+  private let cacheDirectoryURL: URL?
   private var index: ComposerRepositoryIndex?
+  private var indexLoadTask: Task<ComposerRepositoryIndex, Error>?
   private var packageCache: [String: CachedDocument] = [:]
   private var missingPackageFiles = Set<String>()
 
   public init(
     repositoryURL: URL,
-    transport: any ComposerRepositoryTransport = URLSessionComposerRepositoryTransport()
+    transport: any ComposerRepositoryTransport = URLSessionComposerRepositoryTransport(),
+    metadataCacheValidityInterval: TimeInterval = 0,
+    cacheDirectoryURL: URL? = nil
   ) throws {
     guard repositoryURL.scheme?.lowercased() == "https", repositoryURL.host != nil else {
       if repositoryURL.scheme?.lowercased() != "https" {
@@ -82,19 +89,47 @@ public actor ComposerRepositoryClient {
     self.repositoryURL = repositoryURL
     self.packagesJSONURL = Self.makePackagesJSONURL(from: repositoryURL)
     self.transport = transport
+    self.metadataCacheValidityInterval = max(0, metadataCacheValidityInterval)
+    self.cacheDirectoryURL = cacheDirectoryURL
+    if let cacheDirectoryURL {
+      try FileManager.default.createDirectory(
+        at: cacheDirectoryURL,
+        withIntermediateDirectories: true
+      )
+    }
   }
 
   public func loadIndex(forceRefresh: Bool = false) async throws -> ComposerRepositoryIndex {
     if !forceRefresh, let index {
       return index
     }
-    let response = try await fetch(packagesJSONURL, cached: nil)
-    guard response.statusCode == 200 else {
-      throw ComposerRepositoryError.unexpectedStatus(response.statusCode)
+    if !forceRefresh, let indexLoadTask {
+      return try await indexLoadTask.value
     }
-    let decoded = try ComposerRepositoryIndex.decode(from: response.data)
-    index = decoded
-    return decoded
+    let url = packagesJSONURL
+    let transport = transport
+    let task = Task<ComposerRepositoryIndex, Error> {
+      try Self.validateSecure(url)
+      var request = URLRequest(url: url)
+      request.httpMethod = "GET"
+      request.setValue("application/json", forHTTPHeaderField: "Accept")
+      let response = try await transport.response(for: request)
+      try Self.validateSecure(response.finalURL)
+      guard response.statusCode == 200 else {
+        throw ComposerRepositoryError.unexpectedStatus(response.statusCode)
+      }
+      return try ComposerRepositoryIndex.decode(from: response.data)
+    }
+    indexLoadTask = task
+    do {
+      let decoded = try await task.value
+      index = decoded
+      indexLoadTask = nil
+      return decoded
+    } catch {
+      indexLoadTask = nil
+      throw error
+    }
   }
 
   public func packages(
@@ -132,6 +167,56 @@ public actor ComposerRepositoryClient {
     return packages
   }
 
+  public func providerPackages(
+    for virtualPackageName: String,
+    includeDevelopmentVersions: Bool = false
+  ) async throws -> [ComposerRepositoryPackage] {
+    guard ComposerPackageName.isValid(virtualPackageName),
+      virtualPackageName == virtualPackageName.lowercased()
+    else {
+      throw ComposerRepositoryError.invalidPackages
+    }
+    let index = try await loadIndex()
+    guard let template = index.providersAPIURLTemplate else {
+      return []
+    }
+    let url = try metadataURL(
+      template: template,
+      packageFileName: virtualPackageName
+    )
+    let response = try await fetch(url, cached: nil)
+    if response.statusCode == 404 {
+      return []
+    }
+    guard response.statusCode == 200,
+      case .object(let root) = try JSONDecoder().decode(JSONValue.self, from: response.data),
+      case .array(let providerValues)? = root["providers"]
+    else {
+      throw ComposerRepositoryError.invalidResponse
+    }
+    let providerNames = try providerValues.map { value -> String in
+      guard case .object(let provider) = value,
+        let name = provider["name"]?.stringValue,
+        ComposerPackageName.isValid(name)
+      else {
+        throw ComposerRepositoryError.invalidResponse
+      }
+      return name
+    }
+    var result: [ComposerRepositoryPackage] = []
+    for name in Set(providerNames).sorted() {
+      let versions = try await packages(
+        named: name,
+        includeDevelopmentVersions: includeDevelopmentVersions
+      )
+      result += versions.filter { package in
+        ((try? package.provides()) ?? [:])[virtualPackageName] != nil
+          || ((try? package.replaces()) ?? [:])[virtualPackageName] != nil
+      }
+    }
+    return result
+  }
+
   private func fetchPackages(
     fileName: String,
     expectedName: String,
@@ -142,7 +227,16 @@ public actor ComposerRepositoryClient {
     if missingPackageFiles.contains(cacheKey) {
       return []
     }
-    let cached = packageCache[cacheKey]
+    let cached = packageCache[cacheKey] ?? cachedDocumentFromDisk(for: cacheKey)
+    if let cached, packageCache[cacheKey] == nil {
+      packageCache[cacheKey] = cached
+    }
+    if let cached,
+      metadataCacheValidityInterval > 0,
+      Date().timeIntervalSince(cached.storedAt) < metadataCacheValidityInterval
+    {
+      return try decodePackages(cached.data, expectedName: expectedName)
+    }
     let response: ComposerHTTPResponse
     do {
       response = try await fetch(url, cached: cached)
@@ -158,14 +252,23 @@ public actor ComposerRepositoryClient {
       missingPackageFiles.remove(cacheKey)
       let document = CachedDocument(
         data: response.data,
-        lastModified: response.header(named: "last-modified")
+        lastModified: response.header(named: "last-modified"),
+        storedAt: Date()
       )
       packageCache[cacheKey] = document
+      storeCachedDocument(document, for: cacheKey)
       return try decodePackages(document.data, expectedName: expectedName)
     case 304:
       guard let cached else {
         throw ComposerRepositoryError.invalidResponse
       }
+      let refreshed = CachedDocument(
+        data: cached.data,
+        lastModified: cached.lastModified,
+        storedAt: Date()
+      )
+      packageCache[cacheKey] = refreshed
+      storeCachedDocument(refreshed, for: cacheKey)
       return try decodePackages(cached.data, expectedName: expectedName)
     case 404:
       missingPackageFiles.insert(cacheKey)
@@ -200,6 +303,35 @@ public actor ComposerRepositoryClient {
       versions,
       expectedName: expectedName
     )
+  }
+
+  private func cachedDocumentFromDisk(for key: String) -> CachedDocument? {
+    guard let url = cacheFileURL(for: key),
+      let data = try? Data(contentsOf: url),
+      let document = try? JSONDecoder().decode(CachedDocument.self, from: data)
+    else {
+      return nil
+    }
+    return document
+  }
+
+  private func storeCachedDocument(_ document: CachedDocument, for key: String) {
+    guard let url = cacheFileURL(for: key),
+      let data = try? JSONEncoder().encode(document)
+    else {
+      return
+    }
+    try? data.write(to: url, options: .atomic)
+  }
+
+  private func cacheFileURL(for key: String) -> URL? {
+    guard let cacheDirectoryURL else {
+      return nil
+    }
+    let digest = SHA256.hash(data: Data(key.utf8)).map {
+      String(format: "%02x", $0)
+    }.joined()
+    return cacheDirectoryURL.appendingPathComponent(digest + ".json", isDirectory: false)
   }
 
   private func fetch(

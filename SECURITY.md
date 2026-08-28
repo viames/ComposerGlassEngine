@@ -28,3 +28,13 @@ package contents as untrusted input. The library must not:
 The default repository client accepts HTTPS URLs only and verifies the final
 response URL after redirects. Custom transports must preserve the same
 security boundary.
+
+The native package downloader enforces a configurable transfer limit and
+verifies cached archives before reuse. The ZIP extractor validates every entry
+before creating its destination, rejects symbolic links and unsafe paths,
+checks CRC-32 values, bounds expansion, and removes incomplete output after a
+failure.
+
+The package materializer only writes to a destination that does not already
+exist. A failed materialization removes that new tree in full and never alters
+an active project vendor directory.

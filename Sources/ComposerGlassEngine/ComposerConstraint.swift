@@ -10,9 +10,14 @@ public struct ComposerConstraint: Equatable, Sendable {
   private let groups: [[Predicate]]
 
   public static func parse(_ value: String) throws -> ComposerConstraint {
-    let stripped = stripStabilityFlag(
-      from: value.trimmingCharacters(in: .whitespacesAndNewlines)
-    )
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    let inlineAlias = trimmed.components(separatedBy: " as ")
+    guard inlineAlias.count <= 2 else {
+      throw ComposerConstraintError.invalidToken(value)
+    }
+    let aliased = inlineAlias.count == 2 ? inlineAlias[1] : inlineAlias[0]
+    let normalizedAlias = normalizeDevelopmentAlias(aliased)
+    let stripped = stripStabilityFlag(from: normalizedAlias)
     guard !stripped.isEmpty else {
       throw ComposerConstraintError.empty
     }
@@ -265,6 +270,22 @@ public struct ComposerConstraint: Equatable, Sendable {
       return value
     }
     return String(value[..<atIndex]).trimmingCharacters(in: .whitespaces)
+  }
+
+  private static func normalizeDevelopmentAlias(_ value: String) -> String {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard trimmed.lowercased().hasSuffix("-dev") else {
+      return trimmed
+    }
+    let numeric = String(trimmed.dropLast(4))
+    guard
+      numeric.split(separator: ".").allSatisfy({ component in
+        component.allSatisfy(\.isNumber) || component.lowercased() == "x" || component == "*"
+      })
+    else {
+      return trimmed
+    }
+    return numeric + "@dev"
   }
 }
 

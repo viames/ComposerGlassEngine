@@ -49,4 +49,18 @@ struct ComposerConstraintTests {
       try ComposerConstraint.parse("^1.0 ||")
     }
   }
+
+  @Test("Numeric development aliases and inline aliases are accepted")
+  func acceptsDevelopmentAliases() throws {
+    let version = ComposerVersion(
+      major: 1,
+      minor: 2,
+      patch: 9_999_999,
+      build: 9_999_999,
+      stability: .development
+    )
+
+    #expect(try ComposerConstraint.parse("1.2.x-dev").matches(version))
+    #expect(try ComposerConstraint.parse("dev-main as 1.2.x-dev").matches(version))
+  }
 }

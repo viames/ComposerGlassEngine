@@ -27,6 +27,10 @@ public struct ComposerRepositoryIndex: Equatable, Sendable {
     fields["metadata-url"]?.stringValue
   }
 
+  public var providersAPIURLTemplate: String? {
+    fields["providers-api"]?.stringValue
+  }
+
   public var availablePackages: [String]? {
     guard case .array(let values)? = fields["available-packages"] else {
       return nil
@@ -141,12 +145,49 @@ public struct ComposerRepositoryPackage: Equatable, Sendable {
     endpointURL(for: "dist")
   }
 
+  public var distType: String? {
+    endpointString(for: "type", in: "dist")
+  }
+
+  public var distReference: String? {
+    endpointString(for: "reference", in: "dist")
+  }
+
+  public var distChecksum: String? {
+    endpointString(for: "shasum", in: "dist")
+  }
+
   public var sourceURL: URL? {
     endpointURL(for: "source")
   }
 
   public func requirements() throws -> [String: String] {
-    guard let rawRequirements = fields["require"] else {
+    try stringMap(named: "require")
+  }
+
+  public func conflicts() throws -> [String: String] {
+    try stringMap(named: "conflict")
+  }
+
+  public func provides() throws -> [String: String] {
+    try stringMap(named: "provide")
+  }
+
+  public func replaces() throws -> [String: String] {
+    try stringMap(named: "replace")
+  }
+
+  public var branchAlias: String? {
+    guard case .object(let extra)? = fields["extra"],
+      case .object(let aliases)? = extra["branch-alias"]
+    else {
+      return nil
+    }
+    return aliases[version]?.stringValue
+  }
+
+  private func stringMap(named field: String) throws -> [String: String] {
+    guard let rawRequirements = fields[field] else {
       return [:]
     }
     guard case .object(let object) = rawRequirements else {
@@ -208,6 +249,13 @@ public struct ComposerRepositoryPackage: Equatable, Sendable {
       return nil
     }
     return URL(string: value)
+  }
+
+  private func endpointString(for field: String, in key: String) -> String? {
+    guard case .object(let endpoint)? = fields[key] else {
+      return nil
+    }
+    return endpoint[field]?.stringValue
   }
 }
 

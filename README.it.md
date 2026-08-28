@@ -4,6 +4,11 @@ ComposerGlass Engine è un motore indipendente e non ufficiale, scritto in
 Swift e progettato per essere compatibile con Composer. Non è affiliato al
 progetto Composer né approvato dai suoi responsabili.
 
+La baseline comportamentale attuale è Composer `2.10.2`, tag `2.10.2`, commit
+`8d4439f572a97670a9edc039eb3b093cc976b4bc`. Consulta
+[COMPOSER-UPSTREAM.it.md](COMPOSER-UPSTREAM.it.md) per il riferimento
+machine-readable e la procedura di confronto con le versioni future.
+
 Il pacchetto è destinato agli strumenti di sviluppo nativi che devono
 analizzare, risolvere e installare dipendenze PHP senza avviare PHP, Composer,
 una shell o un altro eseguibile. Le prime versioni `0.x` implementano
@@ -32,12 +37,31 @@ codice dei pacchetti scaricati.
   al profilo di sicurezza per App Store.
 - Risoluzione deterministica della versione compatibile più alta, con requisiti
   transitivi e backtracking.
+- Alias dei rami, versioni di sviluppo, `conflict`, `replace`, `provide` e
+  individuazione dei fornitori di pacchetti virtuali.
 - Validazione dei pacchetti virtuali della piattaforma per PHP, estensioni,
   librerie e Composer.
 - Supporto di `minimum-stability`, dei flag di stabilità dichiarati nel
   progetto principale e di `prefer-stable`.
 - Descrizione strutturata degli errori di risoluzione, con vincoli coinvolti e
   versioni disponibili nel repository.
+- Download asincrono e limitato agli URL HTTPS degli archivi ZIP, con controllo
+  della dimensione durante il trasferimento.
+- Cache persistente degli archivi, con verifica SHA-256 e controllo facoltativo
+  del checksum SHA-1 fornito dai repository Composer.
+- Estrazione nativa degli archivi ZIP con voci memorizzate o DEFLATE, verifica
+  CRC-32, contenimento dei percorsi, limiti di espansione e rollback in caso di
+  errore.
+- Creazione deterministica di nuovi alberi `vendor`, con metadati dei pacchetti
+  installati e rimozione completa della destinazione in caso di errore.
+- Generazione dell’autoload PSR-0, PSR-4, classmap e files, oltre ai proxy
+  deterministici in `vendor/bin`.
+- Sostituzione transazionale della directory `vendor`, con journal di recupero
+  e rollback.
+- Generazione deterministica del lockfile e flussi nativi per aggiornamento,
+  aggiornamento selettivo, `require` e `remove`, con backup dei file di progetto.
+- Servizi nativi per `install`, `validate`, `show`, `outdated`, `audit` e
+  `dump-autoload`.
 - Swift Package privo di dipendenze, adatto al collegamento statico.
 
 Prima di utilizzare il pacchetto per modificare un progetto, consulta
@@ -51,6 +75,7 @@ Prima di utilizzare il pacchetto per modificare un progetto, consulta
 ## Utilizzo
 
 ```swift
+import Foundation
 import ComposerGlassEngine
 
 let manifesto = try ComposerManifest.decode(from: datiManifesto)
@@ -76,16 +101,44 @@ if let urlRepository = URL(string: "https://repo.packagist.org") {
     let risultato = try await risolutore.resolve(
         requirements: ["psr/log": "^3.0"]
     )
+
+    if !risultato.packages.isEmpty,
+       let directoryCache = FileManager.default.urls(
+           for: .cachesDirectory,
+           in: .userDomainMask
+       ).first {
+        let downloader = try ComposerPackageDownloader(
+            cacheDirectory: directoryCache.appendingPathComponent("ComposerGlassEngine")
+        )
+        let materializzatore = ComposerPackageMaterializer(downloader: downloader)
+        let materializzato = try await materializzatore.materialize(
+            risultato,
+            at: directoryCache.appendingPathComponent(
+                "ComposerGlassEngine-Vendor-\(UUID().uuidString)"
+            )
+        )
+    }
 }
 ```
 
-Il risolutore della serie `0.4` supporta versioni numeriche, vincoli `require`
+Il risolutore supporta versioni numeriche e di sviluppo, vincoli `require`
 principali e transitivi, pacchetti della piattaforma, livelli di stabilità,
-cicli e backtracking deterministico. Gli alias dei rami, i vincoli `conflict`,
-i meccanismi `replace` e `provide` — inclusi i pacchetti virtuali dichiarati
-tramite `provide` — e la piena equivalenza con il risolutore SAT di Composer non
-rientrano ancora in questa versione; le versioni non supportate non vengono mai
-installate implicitamente.
+cicli, backtracking deterministico, alias dei rami, conflitti, sostituzioni e
+fornitori virtuali. La piena equivalenza con il risolutore SAT di Composer non
+rientra ancora in questa versione; i vincoli non supportati non vengono mai
+accettati implicitamente.
+
+Il downloader e l'estrattore accettano attualmente distribuzioni ZIP contenenti
+voci memorizzate o DEFLATE. Prima del riutilizzo viene verificato il contenuto
+della cache; l'estrazione rifiuta percorsi non sicuri, collegamenti simbolici,
+voci cifrate, duplicati, collisioni e superamenti dei limiti configurati. Il
+codice dei pacchetti non viene mai eseguito.
+
+I servizi nativi di alto livello installano in una directory di staging,
+generano i metadati di autoload e i proxy binari, quindi attivano `vendor` in
+modo transazionale. Le operazioni che modificano le dipendenze registrano anche
+`composer.json` e `composer.lock`, così da consentire il recupero o il rollback
+dopo un’interruzione.
 
 ## Sviluppo
 
