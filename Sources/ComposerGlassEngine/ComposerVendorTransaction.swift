@@ -78,15 +78,23 @@ public actor ComposerVendorTransaction {
   }
 
   private let fileManager: FileManager
+  private let stateStorage: ComposerNativeStateStorage
   private let interruptionPoint: ComposerVendorTransactionInterruptionPoint?
 
-  public init() {
+  public init(
+    stateStorage: ComposerNativeStateStorage = .applicationSupport
+  ) {
     self.fileManager = FileManager()
+    self.stateStorage = stateStorage
     self.interruptionPoint = nil
   }
 
-  init(interruptionPoint: ComposerVendorTransactionInterruptionPoint?) {
+  init(
+    interruptionPoint: ComposerVendorTransactionInterruptionPoint?,
+    stateStorage: ComposerNativeStateStorage = .applicationSupport
+  ) {
     self.fileManager = FileManager()
+    self.stateStorage = stateStorage
     self.interruptionPoint = interruptionPoint
   }
 
@@ -104,7 +112,10 @@ public actor ComposerVendorTransaction {
     }
     try validateSameVolume(preparedURL, activeVendorURL.deletingLastPathComponent())
 
-    let stateDirectoryURL = try stateDirectory(in: projectURL)
+    let stateDirectoryURL = try stateStorage.stateDirectory(
+      for: projectURL,
+      fileManager: fileManager
+    )
     let activeJournalURL = stateDirectoryURL.appendingPathComponent("active-transaction.json")
     guard !fileManager.fileExists(atPath: activeJournalURL.path) else {
       throw ComposerVendorTransactionError.interruptedTransactionExists(activeJournalURL)
@@ -180,9 +191,8 @@ public actor ComposerVendorTransaction {
     in projectDirectoryURL: URL
   ) throws -> ComposerVendorRecoveryResult? {
     let projectURL = projectDirectoryURL.standardizedFileURL
-    let activeJournalURL =
-      projectURL
-      .appendingPathComponent(".composerglass-engine", isDirectory: true)
+    let activeJournalURL = try stateStorage
+      .stateDirectory(for: projectURL, fileManager: fileManager)
       .appendingPathComponent("active-transaction.json")
     guard fileManager.fileExists(atPath: activeJournalURL.path) else {
       return nil
@@ -329,9 +339,8 @@ public actor ComposerVendorTransaction {
     in projectDirectoryURL: URL
   ) throws -> [ComposerVendorTransactionResult] {
     let projectURL = projectDirectoryURL.standardizedFileURL
-    let backupsURL =
-      projectURL
-      .appendingPathComponent(".composerglass-engine", isDirectory: true)
+    let backupsURL = try stateStorage
+      .stateDirectory(for: projectURL, fileManager: fileManager)
       .appendingPathComponent("backups", isDirectory: true)
     guard fileManager.fileExists(atPath: backupsURL.path) else {
       return []
@@ -369,18 +378,6 @@ public actor ComposerVendorTransaction {
       throw ComposerVendorTransactionError.invalidBackup(backupURL)
     }
     try fileManager.removeItem(at: backupURL)
-  }
-
-  private func stateDirectory(in projectURL: URL) throws -> URL {
-    let stateURL = projectURL.appendingPathComponent(
-      ".composerglass-engine",
-      isDirectory: true
-    )
-    if fileManager.fileExists(atPath: stateURL.path) {
-      try rejectSymbolicLink(stateURL)
-    }
-    try fileManager.createDirectory(at: stateURL, withIntermediateDirectories: true)
-    return stateURL
   }
 
   private func validateDirectory(

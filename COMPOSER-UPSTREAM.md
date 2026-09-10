@@ -2,12 +2,12 @@
 
 [Documentazione italiana](COMPOSER-UPSTREAM.it.md)
 
-ComposerGlass Engine `0.1.0` uses Composer `2.10.2` as its behavioral
+ComposerGlass Engine `0.1.0` uses Composer `2.10.3` as its behavioral
 compatibility baseline:
 
-- release date: `2026-07-01`;
-- signed upstream tag: `2.10.2`;
-- immutable source commit: `8d4439f572a97670a9edc039eb3b093cc976b4bc`;
+- release date: `2026-08-27`;
+- signed upstream tag: `2.10.3`;
+- immutable source commit: `f0de0bf90226853b841672f086d8b58b02332504`;
 - upstream repository: <https://github.com/composer/composer>.
 
 The same data is available to automation in `COMPOSER-UPSTREAM.json` and to

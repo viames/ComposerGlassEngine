@@ -142,18 +142,21 @@ public actor ComposerNativeDependencyManager {
   private let installer: ComposerNativeInstaller
   private let lockGenerator: ComposerLockGenerator
   private let fileManager: FileManager
+  private let stateStorage: ComposerNativeStateStorage
   private let interruptionPoint: ComposerNativeDependencyManagerInterruptionPoint?
 
   public init(
     source: any ComposerPackageSource,
     platform: ComposerResolutionPlatform = .empty,
     installer: ComposerNativeInstaller,
-    lockGenerator: ComposerLockGenerator = ComposerLockGenerator()
+    lockGenerator: ComposerLockGenerator = ComposerLockGenerator(),
+    stateStorage: ComposerNativeStateStorage = .applicationSupport
   ) {
     self.resolver = ComposerDependencyResolver(source: source, platform: platform)
     self.installer = installer
     self.lockGenerator = lockGenerator
     self.fileManager = FileManager()
+    self.stateStorage = stateStorage
     self.interruptionPoint = nil
   }
 
@@ -162,12 +165,14 @@ public actor ComposerNativeDependencyManager {
     platform: ComposerResolutionPlatform = .empty,
     installer: ComposerNativeInstaller,
     lockGenerator: ComposerLockGenerator = ComposerLockGenerator(),
+    stateStorage: ComposerNativeStateStorage = .applicationSupport,
     interruptionPoint: ComposerNativeDependencyManagerInterruptionPoint?
   ) {
     self.resolver = ComposerDependencyResolver(source: source, platform: platform)
     self.installer = installer
     self.lockGenerator = lockGenerator
     self.fileManager = FileManager()
+    self.stateStorage = stateStorage
     self.interruptionPoint = interruptionPoint
   }
 
@@ -235,7 +240,7 @@ public actor ComposerNativeDependencyManager {
     }
 
     try Task.checkCancellation()
-    let journalURL = activeJournalURL(in: projectURL)
+    let journalURL = try activeJournalURL(in: projectURL)
     let journal = try await beginMutation(
       projectURL: projectURL,
       manifestData: manifestData,
@@ -311,7 +316,7 @@ public actor ComposerNativeDependencyManager {
     in projectDirectoryURL: URL
   ) throws -> [ComposerNativeMutationResult] {
     let projectURL = projectDirectoryURL.resolvingSymlinksInPath().standardizedFileURL
-    let root = projectBackupsURL(in: projectURL)
+    let root = try projectBackupsURL(in: projectURL)
     guard fileManager.fileExists(atPath: root.path) else {
       return []
     }
@@ -343,7 +348,7 @@ public actor ComposerNativeDependencyManager {
     in projectDirectoryURL: URL
   ) async throws -> ComposerNativeMutationResult? {
     let projectURL = projectDirectoryURL.resolvingSymlinksInPath().standardizedFileURL
-    let journalURL = activeJournalURL(in: projectURL)
+    let journalURL = try activeJournalURL(in: projectURL)
     guard fileManager.fileExists(atPath: journalURL.path) else {
       return nil
     }
@@ -512,14 +517,15 @@ public actor ComposerNativeDependencyManager {
     manifestData: Data,
     lockData: Data
   ) async throws -> MutationJournal {
-    let stateURL = stateDirectoryURL(in: projectURL)
+    let stateURL = try stateDirectoryURL(in: projectURL)
     try fileManager.createDirectory(at: stateURL, withIntermediateDirectories: true)
-    let journalURL = activeJournalURL(in: projectURL)
+    let journalURL = stateURL.appendingPathComponent("active-project-mutation.json")
     guard !fileManager.fileExists(atPath: journalURL.path) else {
       throw ComposerNativeDependencyError.interruptedMutationExists(journalURL)
     }
     let identifier = UUID()
-    let backupURL = projectBackupsURL(in: projectURL)
+    let backupURL = stateURL
+      .appendingPathComponent("project-backups", isDirectory: true)
       .appendingPathComponent(identifier.uuidString, isDirectory: true)
     try fileManager.createDirectory(at: backupURL, withIntermediateDirectories: true)
     let manifestURL = projectURL.appendingPathComponent("composer.json")
@@ -629,16 +635,17 @@ public actor ComposerNativeDependencyManager {
     }
   }
 
-  private func stateDirectoryURL(in projectURL: URL) -> URL {
-    projectURL.appendingPathComponent(".composerglass-engine", isDirectory: true)
+  private func stateDirectoryURL(in projectURL: URL) throws -> URL {
+    try stateStorage.stateDirectory(for: projectURL, fileManager: fileManager)
   }
 
-  private func activeJournalURL(in projectURL: URL) -> URL {
-    stateDirectoryURL(in: projectURL).appendingPathComponent("active-project-mutation.json")
+  private func activeJournalURL(in projectURL: URL) throws -> URL {
+    try stateDirectoryURL(in: projectURL)
+      .appendingPathComponent("active-project-mutation.json")
   }
 
-  private func projectBackupsURL(in projectURL: URL) -> URL {
-    stateDirectoryURL(in: projectURL).appendingPathComponent(
+  private func projectBackupsURL(in projectURL: URL) throws -> URL {
+    try stateDirectoryURL(in: projectURL).appendingPathComponent(
       "project-backups",
       isDirectory: true
     )

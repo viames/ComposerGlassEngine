@@ -8,14 +8,16 @@ struct ComposerVendorTransactionTests {
   @Test("Installation replaces vendor and rollback restores it")
   func installsAndRollsBack() async throws {
     let project = try transactionProject()
-    defer { try? FileManager.default.removeItem(at: project) }
+    defer { removeNativeTestArtifacts(for: project) }
     let oldVendor = project.appendingPathComponent("vendor")
     try FileManager.default.createDirectory(at: oldVendor, withIntermediateDirectories: true)
     try Data("old".utf8).write(to: oldVendor.appendingPathComponent("old.txt"))
     let prepared = project.appendingPathComponent("prepared-vendor")
     try FileManager.default.createDirectory(at: prepared, withIntermediateDirectories: true)
     try Data("new".utf8).write(to: prepared.appendingPathComponent("new.txt"))
-    let transaction = ComposerVendorTransaction()
+    let transaction = ComposerVendorTransaction(
+      stateStorage: nativeTestStateStorage(for: project)
+    )
 
     let result = try await transaction.install(
       preparedVendorURL: prepared,
@@ -46,11 +48,13 @@ struct ComposerVendorTransactionTests {
   @Test("Rollback removes a newly introduced vendor directory")
   func rollsBackWithoutPreviousVendor() async throws {
     let project = try transactionProject()
-    defer { try? FileManager.default.removeItem(at: project) }
+    defer { removeNativeTestArtifacts(for: project) }
     let prepared = project.appendingPathComponent("prepared-vendor")
     try FileManager.default.createDirectory(at: prepared, withIntermediateDirectories: true)
     try Data("new".utf8).write(to: prepared.appendingPathComponent("new.txt"))
-    let transaction = ComposerVendorTransaction()
+    let transaction = ComposerVendorTransaction(
+      stateStorage: nativeTestStateStorage(for: project)
+    )
     let result = try await transaction.install(preparedVendorURL: prepared, in: project)
 
     try await transaction.rollback(result)
@@ -61,11 +65,13 @@ struct ComposerVendorTransactionTests {
   @Test("Rollback refuses an externally changed vendor tree")
   func rejectsChangedVendorRollback() async throws {
     let project = try transactionProject()
-    defer { try? FileManager.default.removeItem(at: project) }
+    defer { removeNativeTestArtifacts(for: project) }
     let prepared = project.appendingPathComponent("prepared-vendor")
     try FileManager.default.createDirectory(at: prepared, withIntermediateDirectories: true)
     try Data("new".utf8).write(to: prepared.appendingPathComponent("new.txt"))
-    let transaction = ComposerVendorTransaction()
+    let transaction = ComposerVendorTransaction(
+      stateStorage: nativeTestStateStorage(for: project)
+    )
     let result = try await transaction.install(preparedVendorURL: prepared, in: project)
     try Data("changed".utf8).write(
       to: project.appendingPathComponent("vendor/new.txt"),
@@ -93,20 +99,24 @@ struct ComposerVendorTransactionTests {
   @Test("Recovery restores the previous vendor after an interrupted move")
   func recoversOldVendorMove() async throws {
     let project = try transactionProject()
-    defer { try? FileManager.default.removeItem(at: project) }
+    defer { removeNativeTestArtifacts(for: project) }
     let active = project.appendingPathComponent("vendor")
     try FileManager.default.createDirectory(at: active, withIntermediateDirectories: true)
     try Data("old".utf8).write(to: active.appendingPathComponent("old.txt"))
     let prepared = project.appendingPathComponent("prepared-vendor")
     try FileManager.default.createDirectory(at: prepared, withIntermediateDirectories: true)
     try Data("new".utf8).write(to: prepared.appendingPathComponent("new.txt"))
-    let interrupted = ComposerVendorTransaction(interruptionPoint: .afterOldVendorMoved)
+    let stateStorage = nativeTestStateStorage(for: project)
+    let interrupted = ComposerVendorTransaction(
+      interruptionPoint: .afterOldVendorMoved,
+      stateStorage: stateStorage
+    )
 
     await #expect(throws: ComposerVendorTransactionTestError.simulatedInterruption) {
       try await interrupted.install(preparedVendorURL: prepared, in: project)
     }
 
-    let recovery = ComposerVendorTransaction()
+    let recovery = ComposerVendorTransaction(stateStorage: stateStorage)
     let result = try await recovery.recoverInterruptedTransaction(in: project)
     #expect(result == .restoredPreviousVendor)
     #expect(
@@ -118,17 +128,21 @@ struct ComposerVendorTransactionTests {
   @Test("Recovery completes an installation interrupted after the new move")
   func completesInterruptedInstallation() async throws {
     let project = try transactionProject()
-    defer { try? FileManager.default.removeItem(at: project) }
+    defer { removeNativeTestArtifacts(for: project) }
     let prepared = project.appendingPathComponent("prepared-vendor")
     try FileManager.default.createDirectory(at: prepared, withIntermediateDirectories: true)
     try Data("new".utf8).write(to: prepared.appendingPathComponent("new.txt"))
-    let interrupted = ComposerVendorTransaction(interruptionPoint: .afterNewVendorMoved)
+    let stateStorage = nativeTestStateStorage(for: project)
+    let interrupted = ComposerVendorTransaction(
+      interruptionPoint: .afterNewVendorMoved,
+      stateStorage: stateStorage
+    )
 
     await #expect(throws: ComposerVendorTransactionTestError.simulatedInterruption) {
       try await interrupted.install(preparedVendorURL: prepared, in: project)
     }
 
-    let recovery = ComposerVendorTransaction()
+    let recovery = ComposerVendorTransaction(stateStorage: stateStorage)
     let result = try await recovery.recoverInterruptedTransaction(in: project)
     guard case .completedInstallation(let transaction)? = result else {
       Issue.record("Expected installation recovery")

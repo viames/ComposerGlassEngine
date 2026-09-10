@@ -11,7 +11,9 @@ public enum ComposerLockGeneratorError: Error, Equatable, Sendable {
 public struct ComposerLockGenerator: Sendable {
   public let pluginAPIVersion: String
 
-  public init(pluginAPIVersion: String = "2.6.0") {
+  public init(
+    pluginAPIVersion: String = ComposerUpstreamPlatformVersions.pluginAPI
+  ) {
     self.pluginAPIVersion = pluginAPIVersion
   }
 

@@ -75,6 +75,33 @@ struct ComposerBinaryGeneratorTests {
       try ComposerBinaryGenerator().generate(in: vendorURL)
     }
   }
+
+  @Test("Binary symlinks cannot escape their package")
+  func rejectsBinarySymlinksEscapingPackage() throws {
+    let vendorURL = try binaryVendor()
+    defer { try? FileManager.default.removeItem(at: vendorURL.deletingLastPathComponent()) }
+    let packageURL = vendorURL.appendingPathComponent("acme/tool")
+    let binaryURL = packageURL.appendingPathComponent("bin/acme")
+    let outsideURL = vendorURL.deletingLastPathComponent().appendingPathComponent("outside")
+    try FileManager.default.createDirectory(
+      at: binaryURL.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+    try Data(#"{"name":"acme/tool","bin":"bin/acme"}"#.utf8)
+      .write(to: packageURL.appendingPathComponent("composer.json"))
+    try Data("do not modify".utf8).write(to: outsideURL)
+    try FileManager.default.createSymbolicLink(at: binaryURL, withDestinationURL: outsideURL)
+
+    do {
+      _ = try ComposerBinaryGenerator().generate(in: vendorURL)
+      Issue.record("Expected the escaping binary symlink to be rejected")
+    } catch let ComposerBinaryGenerationError.symbolicLink(rejectedURL) {
+      #expect(rejectedURL.path.hasSuffix("/vendor/acme/tool/bin/acme"))
+    } catch {
+      Issue.record("Unexpected error: \(error)")
+    }
+    #expect(try String(contentsOf: outsideURL, encoding: .utf8) == "do not modify")
+  }
 }
 
 private func binaryVendor() throws -> URL {

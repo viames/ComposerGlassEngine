@@ -4,8 +4,8 @@ ComposerGlass Engine è un motore indipendente e non ufficiale, scritto in
 Swift e progettato per essere compatibile con Composer. Non è affiliato al
 progetto Composer né approvato dai suoi responsabili.
 
-La baseline comportamentale attuale è Composer `2.10.2`, tag `2.10.2`, commit
-`8d4439f572a97670a9edc039eb3b093cc976b4bc`. Consulta
+La baseline comportamentale attuale è Composer `2.10.3`, tag `2.10.3`, commit
+`f0de0bf90226853b841672f086d8b58b02332504`. Consulta
 [COMPOSER-UPSTREAM.it.md](COMPOSER-UPSTREAM.it.md) per il riferimento
 machine-readable e la procedura di confronto con le versioni future.
 
@@ -138,7 +138,11 @@ I servizi nativi di alto livello installano in una directory di staging,
 generano i metadati di autoload e i proxy binari, quindi attivano `vendor` in
 modo transazionale. Le operazioni che modificano le dipendenze registrano anche
 `composer.json` e `composer.lock`, così da consentire il recupero o il rollback
-dopo un’interruzione.
+dopo un’interruzione. Lo stato delle transazioni, le directory di staging e i
+backup vengono salvati fuori dai progetti gestiti, nella directory Application
+Support di ComposerGlass. Le directory `.composerglass-engine` esistenti
+vengono migrate automaticamente, compresi i percorsi dei journal necessari per
+il recupero e il rollback.
 
 ## Sviluppo
 

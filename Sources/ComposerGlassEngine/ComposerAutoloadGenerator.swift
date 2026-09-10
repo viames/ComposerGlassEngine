@@ -4,6 +4,7 @@ import Foundation
 public enum ComposerAutoloadGenerationError: Error, Equatable, Sendable {
   case vendorDirectoryMissing(URL)
   case invalidPackageManifest(URL)
+  case invalidInstalledMetadata(URL)
   case invalidAutoload(package: String, field: String)
   case unsafePath(package: String, path: String)
   case symbolicLink(URL)
@@ -145,6 +146,11 @@ public struct ComposerAutoloadGenerator {
     psr0 = psr0.mapValues(Self.unique)
     files = Self.unique(files)
 
+    classmap["Composer\\InstalledVersions"] = PHPPath(
+      location: .package("composer"),
+      relativePath: "InstalledVersions.php"
+    )
+
     let composerDirectory = vendorDirectoryURL.appendingPathComponent(
       "composer",
       isDirectory: true
@@ -152,6 +158,11 @@ public struct ComposerAutoloadGenerator {
     try fileManager.createDirectory(
       at: composerDirectory,
       withIntermediateDirectories: true
+    )
+    try ComposerInstalledVersionsGenerator.write(
+      rootManifest: rootManifest,
+      composerDirectoryURL: composerDirectory,
+      fileManager: fileManager
     )
     let initializer = Self.initializerName(
       psr4: psr4,
@@ -337,16 +348,28 @@ public struct ComposerAutoloadGenerator {
         ? package.directoryURL
         : package.directoryURL.appendingPathComponent(relativePath)
       for fileURL in try phpFiles(at: targetURL) {
-        let relativeFilePath = fileURL.path.replacingOccurrences(
-          of: package.directoryURL.path + "/",
-          with: ""
-        )
+        let packagePath = package.directoryURL.resolvingSymlinksInPath().standardizedFileURL.path
+        let filePath = fileURL.resolvingSymlinksInPath().standardizedFileURL.path
+        let relativePrefix = packagePath + "/"
+        guard filePath.hasPrefix(relativePrefix) else {
+          throw ComposerAutoloadGenerationError.unsafePath(
+            package: package.name,
+            path: fileURL.path
+          )
+        }
+        let relativeFilePath = String(filePath.dropFirst(relativePrefix.count))
         let phpPath = PHPPath(
           location: package.baseLocation,
           relativePath: relativeFilePath
         )
         for className in try Self.declaredClasses(in: fileURL) {
-          if classmap[className] != nil {
+          if let existingPath = classmap[className] {
+            // Composer packages may list both a directory and a file inside it.
+            // Scanning the same declaration twice is harmless; only different
+            // files declaring the same symbol are ambiguous.
+            if existingPath.expression == phpPath.expression {
+              continue
+            }
             throw ComposerAutoloadGenerationError.duplicateClass(className)
           }
           classmap[className] = phpPath

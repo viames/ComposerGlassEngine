@@ -8,7 +8,7 @@ struct ComposerNativeMaintenanceTests {
   @Test("Dump-autoload replaces generated metadata transactionally and supports rollback")
   func dumpsAutoloadAndRollsBack() async throws {
     let project = try maintenanceTemporaryDirectory()
-    defer { try? FileManager.default.removeItem(at: project) }
+    defer { removeNativeTestArtifacts(for: project) }
     try Data(
       #"{"autoload":{"psr-4":{"Project\\":"src/"}}}"#.utf8
     ).write(to: project.appendingPathComponent("composer.json"))
@@ -16,7 +16,9 @@ struct ComposerNativeMaintenanceTests {
     try FileManager.default.createDirectory(at: vendor, withIntermediateDirectories: true)
     let marker = vendor.appendingPathComponent("before.txt")
     try Data("before".utf8).write(to: marker)
-    let maintenance = ComposerNativeMaintenance()
+    let maintenance = ComposerNativeMaintenance(
+      stateStorage: nativeTestStateStorage(for: project)
+    )
 
     let result = try await maintenance.dumpAutoload(projectDirectoryURL: project)
 
@@ -34,7 +36,7 @@ struct ComposerNativeMaintenanceTests {
   @Test("Symbolic links are rejected before vendor is copied")
   func rejectsSymbolicLinks() async throws {
     let project = try maintenanceTemporaryDirectory()
-    defer { try? FileManager.default.removeItem(at: project) }
+    defer { removeNativeTestArtifacts(for: project) }
     try Data(#"{}"#.utf8).write(to: project.appendingPathComponent("composer.json"))
     let vendor = project.appendingPathComponent("vendor", isDirectory: true)
     try FileManager.default.createDirectory(at: vendor, withIntermediateDirectories: true)
@@ -44,7 +46,9 @@ struct ComposerNativeMaintenanceTests {
     try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
 
     do {
-      _ = try await ComposerNativeMaintenance().dumpAutoload(projectDirectoryURL: project)
+      _ = try await ComposerNativeMaintenance(
+        stateStorage: nativeTestStateStorage(for: project)
+      ).dumpAutoload(projectDirectoryURL: project)
       Issue.record("Expected symbolic-link validation to fail")
     } catch let ComposerNativeMaintenanceError.symbolicLink(url) {
       #expect(url.lastPathComponent == "link")

@@ -1,11 +1,11 @@
 # Baseline upstream di Composer
 
-ComposerGlass Engine `0.1.0` utilizza Composer `2.10.2` come baseline per la
+ComposerGlass Engine `0.1.0` utilizza Composer `2.10.3` come baseline per la
 compatibilità comportamentale:
 
-- data di pubblicazione: `2026-07-01`;
-- tag upstream firmato: `2.10.2`;
-- commit sorgente immutabile: `8d4439f572a97670a9edc039eb3b093cc976b4bc`;
+- data di pubblicazione: `2026-08-27`;
+- tag upstream firmato: `2.10.3`;
+- commit sorgente immutabile: `f0de0bf90226853b841672f086d8b58b02332504`;
 - repository upstream: <https://github.com/composer/composer>.
 
 Gli stessi dati sono disponibili per le automazioni in

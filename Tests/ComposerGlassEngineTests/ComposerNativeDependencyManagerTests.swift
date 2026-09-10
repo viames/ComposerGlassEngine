@@ -8,7 +8,7 @@ struct ComposerNativeDependencyManagerTests {
   @Test("Require resolves, writes, installs, and rolls back every project artifact")
   func requiresAndRollsBackPackage() async throws {
     let projectURL = try temporaryDirectory()
-    defer { try? FileManager.default.removeItem(at: projectURL) }
+    defer { removeNativeTestArtifacts(for: projectURL) }
     let originalManifest = Data(#"{"name":"example/project"}"#.utf8)
     try originalManifest.write(to: projectURL.appendingPathComponent("composer.json"))
     let source = DependencyStubSource(packages: [
@@ -51,7 +51,7 @@ struct ComposerNativeDependencyManagerTests {
   @Test("Remove updates the manifest and can restore the preceding installed state")
   func removesAndRestoresPackage() async throws {
     let projectURL = try temporaryDirectory()
-    defer { try? FileManager.default.removeItem(at: projectURL) }
+    defer { removeNativeTestArtifacts(for: projectURL) }
     try Data(#"{"require":{"vendor/library":"^1.0"}}"#.utf8).write(
       to: projectURL.appendingPathComponent("composer.json")
     )
@@ -81,7 +81,7 @@ struct ComposerNativeDependencyManagerTests {
   @Test("A selective dry run keeps unrelated locked root packages pinned")
   func selectivelyUpdatesOnePackage() async throws {
     let projectURL = try temporaryDirectory()
-    defer { try? FileManager.default.removeItem(at: projectURL) }
+    defer { removeNativeTestArtifacts(for: projectURL) }
     let manifestData = Data(
       #"{"require":{"vendor/a":"^1.0 || ^2.0","vendor/b":"^1.0 || ^2.0"}}"#.utf8
     )
@@ -126,7 +126,7 @@ struct ComposerNativeDependencyManagerTests {
   @Test("Removing an undeclared package fails without changing the project")
   func rejectsRemovingUndeclaredPackage() async throws {
     let projectURL = try temporaryDirectory()
-    defer { try? FileManager.default.removeItem(at: projectURL) }
+    defer { removeNativeTestArtifacts(for: projectURL) }
     let manifestData = Data(#"{"name":"example/project"}"#.utf8)
     try manifestData.write(to: projectURL.appendingPathComponent("composer.json"))
     let manager = try makeManager(
@@ -143,7 +143,7 @@ struct ComposerNativeDependencyManagerTests {
   @Test("Recovery restores project files when interruption precedes vendor activation")
   func recoversBeforeVendorActivation() async throws {
     let projectURL = try temporaryDirectory()
-    defer { try? FileManager.default.removeItem(at: projectURL) }
+    defer { removeNativeTestArtifacts(for: projectURL) }
     let manifestData = Data(#"{"require":{"vendor/library":"^1.0"}}"#.utf8)
     try manifestData.write(to: projectURL.appendingPathComponent("composer.json"))
     let source = DependencyStubSource(packages: [
@@ -174,7 +174,7 @@ struct ComposerNativeDependencyManagerTests {
   @Test("Recovery commits project files when vendor activation had completed")
   func recoversAfterVendorActivation() async throws {
     let projectURL = try temporaryDirectory()
-    defer { try? FileManager.default.removeItem(at: projectURL) }
+    defer { removeNativeTestArtifacts(for: projectURL) }
     try Data(#"{"require":{"vendor/library":"^1.0"}}"#.utf8).write(
       to: projectURL.appendingPathComponent("composer.json")
     )
@@ -213,12 +213,15 @@ struct ComposerNativeDependencyManagerTests {
     interruptionPoint: ComposerNativeDependencyManagerInterruptionPoint? = nil
   ) throws -> ComposerNativeDependencyManager {
     let cacheURL = projectURL.appendingPathComponent("cache", isDirectory: true)
+    let stateStorage = nativeTestStateStorage(for: projectURL)
     let installer = ComposerNativeInstaller(
-      downloader: try ComposerPackageDownloader(cacheDirectory: cacheURL)
+      downloader: try ComposerPackageDownloader(cacheDirectory: cacheURL),
+      stateStorage: stateStorage
     )
     return ComposerNativeDependencyManager(
       source: source,
       installer: installer,
+      stateStorage: stateStorage,
       interruptionPoint: interruptionPoint
     )
   }

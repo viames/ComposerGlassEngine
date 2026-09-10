@@ -8,7 +8,7 @@ struct ComposerNativeInstallerTests {
   @Test("Installs a fresh lock file without executing package code")
   func installsProjectFromLockFile() async throws {
     let project = try zipTemporaryDirectory()
-    defer { try? FileManager.default.removeItem(at: project) }
+    defer { removeNativeTestArtifacts(for: project) }
     let manifestData = Data(
       #"{"name":"root/project","require":{"acme/library":"1.0.0"},"scripts":{"post-install-cmd":"Acme\\Setup::run"},"autoload":{"psr-4":{"Root\\":"src/"}}}"#
         .utf8
@@ -45,7 +45,8 @@ struct ComposerNativeInstallerTests {
       downloader: try ComposerPackageDownloader(
         cacheDirectory: project.appendingPathComponent("cache"),
         transport: transport
-      )
+      ),
+      stateStorage: nativeTestStateStorage(for: project)
     )
     let events = NativeInstallerEvents()
 
@@ -69,6 +70,11 @@ struct ComposerNativeInstallerTests {
     )
     #expect(
       !FileManager.default.fileExists(atPath: oldVendor.appendingPathComponent("old.txt").path))
+    #expect(
+      !FileManager.default.fileExists(
+        atPath: project.appendingPathComponent(".composerglass-engine").path
+      )
+    )
     #expect(await transport.requestCount == 1)
     let capturedEvents = await events.values
     #expect(capturedEvents.first == .recovering)
@@ -84,7 +90,7 @@ struct ComposerNativeInstallerTests {
   @Test("Stale lock files fail before changing vendor")
   func rejectsStaleLockFile() async throws {
     let project = try zipTemporaryDirectory()
-    defer { try? FileManager.default.removeItem(at: project) }
+    defer { removeNativeTestArtifacts(for: project) }
     try Data(#"{"name":"root/project"}"#.utf8)
       .write(to: project.appendingPathComponent("composer.json"))
     let lockFile = try ComposerLockFile(contentHash: String(repeating: "0", count: 32))
@@ -97,7 +103,8 @@ struct ComposerNativeInstallerTests {
       downloader: try ComposerPackageDownloader(
         cacheDirectory: project.appendingPathComponent("cache"),
         transport: transport
-      )
+      ),
+      stateStorage: nativeTestStateStorage(for: project)
     )
 
     await #expect(throws: ComposerNativeInstallError.staleLockFile) {
@@ -114,7 +121,7 @@ struct ComposerNativeInstallerTests {
   @Test("Composer plugins are installed but never executed by the App Store profile")
   func installsComposerPluginsWithoutExecutingThem() async throws {
     let project = try zipTemporaryDirectory()
-    defer { try? FileManager.default.removeItem(at: project) }
+    defer { removeNativeTestArtifacts(for: project) }
     let manifestData = Data(#"{"name":"root/project"}"#.utf8)
     try manifestData.write(to: project.appendingPathComponent("composer.json"))
     let plugin = try ComposerLockedPackage(
@@ -144,7 +151,8 @@ struct ComposerNativeInstallerTests {
       downloader: try ComposerPackageDownloader(
         cacheDirectory: project.appendingPathComponent("cache"),
         transport: NativeInstallerTransport(payload: archive)
-      )
+      ),
+      stateStorage: nativeTestStateStorage(for: project)
     )
 
     let result = try await installer.install(projectDirectoryURL: project)

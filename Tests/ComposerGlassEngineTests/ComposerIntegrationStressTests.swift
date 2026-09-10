@@ -99,7 +99,11 @@ struct ComposerIntegrationStressTests {
         to: prepared.appendingPathComponent(String(format: "%04d.txt", index))
       )
     }
-    let transaction = ComposerVendorTransaction()
+    let transaction = ComposerVendorTransaction(
+      stateStorage: ComposerNativeStateStorage(
+        rootDirectoryURL: root.appendingPathComponent("State", isDirectory: true)
+      )
+    )
 
     let result = try await transaction.install(preparedVendorURL: prepared, in: project)
     #expect(

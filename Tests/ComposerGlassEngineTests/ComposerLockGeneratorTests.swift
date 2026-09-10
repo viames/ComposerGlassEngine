@@ -65,7 +65,7 @@ struct ComposerLockGeneratorTests {
     #expect(locked["autoload"] == package["autoload"])
     #expect(lock["stability-flags"] == .object(["vendor/app": .number(10)]))
     #expect(lock["platform-overrides"] == .object(["php": .string("8.3.0")]))
-    #expect(lock.pluginAPIVersion == "2.6.0")
+    #expect(lock.pluginAPIVersion == "2.9.0")
   }
 
   @Test("A missing package in a resolved runtime graph is rejected")

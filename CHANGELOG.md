@@ -9,7 +9,7 @@ versions may contain source-breaking API improvements.
 
 ### Added
 
-- A versioned Composer `2.10.2` upstream baseline, public Swift metadata,
+- A versioned Composer `2.10.3` upstream baseline, public Swift metadata,
   machine-readable compatibility manifest, and future-release comparison tool.
 - Asynchronous, HTTPS-only ZIP distribution downloads based on `URLSession`.
 - Persistent archive caching with SHA-256 validation before reuse.
@@ -26,6 +26,19 @@ versions may contain source-breaking API improvements.
 - Composer-style `vendor/composer/installed.json` metadata and executable-bit
   preservation.
 - Full new-vendor rollback when any package download or extraction fails.
+
+### Changed
+
+- Native transaction state, staging directories, and backups now live in
+  ComposerGlass's Application Support directory instead of managed projects.
+- Legacy `.composerglass-engine` directories are migrated automatically while
+  preserving interrupted-operation recovery and rollback journal paths.
+
+### Security
+
+- Verified binary proxy generation against Composer 2.10.3's package-bin
+  symlink escape advisory; the native engine rejects symbolic links before
+  creating executable proxies.
 
 ## 0.1.0 — 2026-08-27
 

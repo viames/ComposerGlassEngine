@@ -65,23 +65,32 @@ public actor ComposerNativeInstaller {
   private let autoloadGenerator: ComposerAutoloadGenerator
   private let binaryGenerator: ComposerBinaryGenerator
   private let fileManager: FileManager
+  private let stateStorage: ComposerNativeStateStorage
 
-  public init(cacheDirectoryURL: URL) throws {
+  public init(
+    cacheDirectoryURL: URL,
+    stateStorage: ComposerNativeStateStorage = .applicationSupport
+  ) throws {
     self.materializer = ComposerPackageMaterializer(
       downloader: try ComposerPackageDownloader(cacheDirectory: cacheDirectoryURL)
     )
-    self.transaction = ComposerVendorTransaction()
+    self.transaction = ComposerVendorTransaction(stateStorage: stateStorage)
     self.autoloadGenerator = ComposerAutoloadGenerator()
     self.binaryGenerator = ComposerBinaryGenerator()
     self.fileManager = FileManager()
+    self.stateStorage = stateStorage
   }
 
-  public init(downloader: ComposerPackageDownloader) {
+  public init(
+    downloader: ComposerPackageDownloader,
+    stateStorage: ComposerNativeStateStorage = .applicationSupport
+  ) {
     self.materializer = ComposerPackageMaterializer(downloader: downloader)
-    self.transaction = ComposerVendorTransaction()
+    self.transaction = ComposerVendorTransaction(stateStorage: stateStorage)
     self.autoloadGenerator = ComposerAutoloadGenerator()
     self.binaryGenerator = ComposerBinaryGenerator()
     self.fileManager = FileManager()
+    self.stateStorage = stateStorage
   }
 
   public func install(
@@ -116,9 +125,9 @@ public actor ComposerNativeInstaller {
     if options.requireFreshLockFile, try !lockFile.isFresh(for: manifestData) {
       throw ComposerNativeInstallError.staleLockFile
     }
-    let stateURL = projectURL.appendingPathComponent(
-      ".composerglass-engine",
-      isDirectory: true
+    let stateURL = try stateStorage.stateDirectory(
+      for: projectURL,
+      fileManager: fileManager
     )
     let stagingRootURL =
       stateURL

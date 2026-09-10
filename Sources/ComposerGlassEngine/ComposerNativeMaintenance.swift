@@ -34,12 +34,18 @@ public struct ComposerNativeMaintenanceResult: Equatable, Sendable {
 /// Rebuilds generated vendor metadata on a private copy and activates it with
 /// the same crash-recoverable transaction used by native installation.
 public actor ComposerNativeMaintenance {
-  private let transaction = ComposerVendorTransaction()
+  private let transaction: ComposerVendorTransaction
   private let autoloadGenerator = ComposerAutoloadGenerator()
   private let binaryGenerator = ComposerBinaryGenerator()
   private let fileManager = FileManager()
+  private let stateStorage: ComposerNativeStateStorage
 
-  public init() {}
+  public init(
+    stateStorage: ComposerNativeStateStorage = .applicationSupport
+  ) {
+    self.transaction = ComposerVendorTransaction(stateStorage: stateStorage)
+    self.stateStorage = stateStorage
+  }
 
   public func dumpAutoload(
     projectDirectoryURL: URL,
@@ -62,8 +68,7 @@ public actor ComposerNativeMaintenance {
     try Task.checkCancellation()
 
     let stagingRoot =
-      projectURL
-      .appendingPathComponent(".composerglass-engine", isDirectory: true)
+      try stateStorage.stateDirectory(for: projectURL, fileManager: fileManager)
       .appendingPathComponent("staging", isDirectory: true)
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     let stagedVendor = stagingRoot.appendingPathComponent("vendor", isDirectory: true)

@@ -6,8 +6,8 @@ ComposerGlass Engine is an independent, unofficial Composer-compatible
 dependency engine written in Swift. It is not affiliated with or endorsed by
 the Composer project.
 
-The current behavioral baseline is Composer `2.10.2`, tag `2.10.2`, commit
-`8d4439f572a97670a9edc039eb3b093cc976b4bc`. See
+The current behavioral baseline is Composer `2.10.3`, tag `2.10.3`, commit
+`f0de0bf90226853b841672f086d8b58b02332504`. See
 [COMPOSER-UPSTREAM.md](COMPOSER-UPSTREAM.md) for the machine-readable reference
 and the future-release comparison workflow.
 
@@ -130,7 +130,11 @@ and configured expansion limits. Package code is never executed.
 The high-level native services install into a staging directory, generate
 autoload metadata and binary proxies, then activate `vendor` transactionally.
 Mutating dependency operations also journal `composer.json` and `composer.lock`
-so an interrupted operation can be recovered or rolled back.
+so an interrupted operation can be recovered or rolled back. Transaction
+state, staging directories, and backups are stored outside managed projects in
+ComposerGlass's Application Support directory. Existing
+`.composerglass-engine` directories are migrated automatically, including
+journal paths required for recovery and rollback.
 
 ## Development
 

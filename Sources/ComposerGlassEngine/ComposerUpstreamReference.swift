@@ -64,16 +64,16 @@ public struct ComposerUpstreamReference: Codable, Equatable, Sendable {
   public static let current = ComposerUpstreamReference(
     schemaVersion: 1,
     engineVersion: "0.1.0",
-    verifiedOn: "2026-08-27",
+    verifiedOn: "2026-09-10",
     compatibilityProfile: "app-store-safe-native-subset",
     composer: ComposerUpstreamRelease(
-      version: "2.10.2",
-      releaseDate: "2026-07-01",
-      tag: "2.10.2",
-      commit: "8d4439f572a97670a9edc039eb3b093cc976b4bc",
+      version: "2.10.3",
+      releaseDate: "2026-08-27",
+      tag: "2.10.3",
+      commit: "f0de0bf90226853b841672f086d8b58b02332504",
       repositoryURL: "https://github.com/composer/composer",
-      releaseURL: "https://github.com/composer/composer/releases/tag/2.10.2",
-      changelogURL: "https://github.com/composer/composer/blob/2.10.2/CHANGELOG.md"
+      releaseURL: "https://github.com/composer/composer/releases/tag/2.10.3",
+      changelogURL: "https://github.com/composer/composer/blob/2.10.3/CHANGELOG.md"
     ),
     implementedAreas: [
       "autoload-generation",
@@ -99,4 +99,12 @@ public struct ComposerUpstreamReference: Codable, Equatable, Sendable {
       "source-installations",
     ]
   )
+}
+
+/// Platform packages exposed by the Composer release used as the behavioral
+/// baseline. Keep these values synchronized with `current`.
+public enum ComposerUpstreamPlatformVersions {
+  public static let composer = ComposerUpstreamReference.current.composer.version
+  public static let pluginAPI = "2.9.0"
+  public static let runtimeAPI = "2.2.2"
 }

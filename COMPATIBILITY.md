@@ -3,8 +3,8 @@
 ComposerGlass Engine uses semantic versioning for its own API. Until version
 `1.0.0`, source compatibility may change between minor releases.
 
-The current behavioral reference is Composer `2.10.2`, tag `2.10.2`, commit
-`8d4439f572a97670a9edc039eb3b093cc976b4bc`. The reference is versioned in
+The current behavioral reference is Composer `2.10.3`, tag `2.10.3`, commit
+`f0de0bf90226853b841672f086d8b58b02332504`. The reference is versioned in
 `COMPOSER-UPSTREAM.json` and exposed by `ComposerUpstreamReference.current`.
 See `COMPOSER-UPSTREAM.md` for the required comparison workflow.
 
@@ -56,6 +56,7 @@ See `COMPOSER-UPSTREAM.md` for the required comparison workflow.
 | Native install from `composer.lock` | Implemented |
 | Native update, selected update, `require`, and `remove` | Implemented |
 | Project mutation backup, recovery, and rollback | Implemented |
+| External transaction state and legacy project-state migration | Implemented |
 | Native validate, show, and outdated inspection | Implemented |
 | Packagist security advisory audit | Implemented |
 | Native dump-autoload maintenance | Implemented |
