@@ -11,11 +11,20 @@ let package = Package(
     .library(
       name: "ComposerGlassEngine",
       targets: ["ComposerGlassEngine"]
-    )
+    ),
+    .executable(
+      name: "composer-glass-engine-probe",
+      targets: ["ComposerGlassEngineProbe"]
+    ),
   ],
   targets: [
     .target(
-      name: "ComposerGlassEngine"
+      name: "ComposerGlassEngine",
+      resources: [.copy("Resources/Composer")]
+    ),
+    .executableTarget(
+      name: "ComposerGlassEngineProbe",
+      dependencies: ["ComposerGlassEngine"]
     ),
     .testTarget(
       name: "ComposerGlassEngineTests",

@@ -40,7 +40,7 @@ public struct ComposerLockGenerator: Sendable {
       let locked = try ComposerLockedPackage(
         name: package.name,
         version: package.version,
-        fields: package.fields
+        fields: composerLockFields(package.fields)
       )
       if runtimeNames.contains(package.name) {
         runtime.append(locked)
@@ -53,8 +53,9 @@ public struct ComposerLockGenerator: Sendable {
     let developmentRequirements = try manifest.requirements(in: .development)
     var fields: [String: JSONValue] = [
       "_readme": .array([
-        .string("This file locks the dependencies of your project to a known state."),
-        .string("This file was generated automatically by ComposerGlassEngine."),
+        .string("This file locks the dependencies of your project to a known state"),
+        .string("Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies"),
+        .string("This file is @generated automatically"),
       ]),
       "aliases": .array(
         resolution.aliases.map { alias in
@@ -87,6 +88,25 @@ public struct ComposerLockGenerator: Sendable {
       developmentPackages: development,
       fields: fields
     )
+  }
+
+  private func composerLockFields(
+    _ source: [String: JSONValue]
+  ) -> [String: JSONValue] {
+    let allowed = Set([
+      "name", "version", "target-dir", "source", "dist",
+      "require", "conflict", "provide", "replace", "require-dev", "suggest", "time",
+      "default-branch", "bin", "type", "extra", "autoload", "autoload-dev",
+      "notification-url", "include-path", "php-ext", "archive", "scripts", "license",
+      "authors", "description", "homepage", "keywords", "repositories", "support",
+      "funding", "abandoned", "transport-options",
+    ])
+    return source.reduce(into: [:]) { result, item in
+      guard allowed.contains(item.key) else { return }
+      if case .array(let values) = item.value, values.isEmpty { return }
+      if case .object(let values) = item.value, values.isEmpty { return }
+      result[item.key] = item.value
+    }
   }
 
   private func reachablePackageNames(

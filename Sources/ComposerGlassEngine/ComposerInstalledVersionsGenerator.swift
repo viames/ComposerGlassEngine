@@ -5,6 +5,7 @@ import Foundation
 enum ComposerInstalledVersionsGenerator {
   static func write(
     rootManifest: ComposerManifest,
+    projectDirectoryURL: URL,
     composerDirectoryURL: URL,
     fileManager: FileManager
   ) throws {
@@ -31,36 +32,55 @@ enum ComposerInstalledVersionsGenerator {
 
     let installedPHP = installedMetadataSource(
       rootManifest: rootManifest,
+      projectDirectoryURL: projectDirectoryURL,
       document: document
     )
     try Data(installedPHP.utf8).write(
       to: composerDirectoryURL.appendingPathComponent("installed.php"),
       options: .atomic
     )
-    try Data(installedVersionsSource.utf8).write(
-      to: composerDirectoryURL.appendingPathComponent("InstalledVersions.php"),
-      options: .atomic
+    guard let installedVersionsURL = Bundle.module.url(
+      forResource: "InstalledVersions.php",
+      withExtension: nil,
+      subdirectory: "Composer"
+    ) else {
+      throw ComposerAutoloadGenerationError.upstreamResourceMissing("InstalledVersions.php")
+    }
+    let installedVersionsDestination = composerDirectoryURL.appendingPathComponent(
+      "InstalledVersions.php"
     )
+    if fileManager.fileExists(atPath: installedVersionsDestination.path) {
+      try fileManager.removeItem(at: installedVersionsDestination)
+    }
+    try fileManager.copyItem(at: installedVersionsURL, to: installedVersionsDestination)
   }
 
   private static func installedMetadataSource(
     rootManifest: ComposerManifest,
+    projectDirectoryURL: URL,
     document: [String: JSONValue]
   ) -> String {
     let rootName = rootManifest.name ?? "__root__"
-    let rootPrettyVersion = rootManifest["version"]?.stringValue ?? "dev-main"
-    let rootVersion = rootManifest["version_normalized"]?.stringValue ?? rootPrettyVersion
+    let rootVersionInfo = rootVersionInfo(
+      rootManifest: rootManifest,
+      projectDirectoryURL: projectDirectoryURL
+    )
+    let rootPrettyVersion = rootVersionInfo.prettyVersion
+    let rootVersion = rootVersionInfo.version
     let rootType = rootManifest.packageType ?? "project"
     let developmentMode = document["dev"]?.boolValue ?? false
+    let developmentPackages = Set(
+      document["dev-package-names"]?.arrayValue?.compactMap(\.stringValue) ?? []
+    )
 
     let rootFields = [
       "name": phpQuote(rootName),
       "pretty_version": phpQuote(rootPrettyVersion),
       "version": phpQuote(rootVersion),
-      "reference": "NULL",
+      "reference": rootVersionInfo.reference.map(phpQuote) ?? "null",
       "type": phpQuote(rootType),
       "install_path": "__DIR__ . '/../../'",
-      "aliases": "array()",
+      "aliases": phpList(rootVersionInfo.aliases, indentation: 3),
       "dev": developmentMode ? "true" : "false",
     ]
 
@@ -68,10 +88,10 @@ enum ComposerInstalledVersionsGenerator {
     versions[rootName] = [
       "pretty_version": phpQuote(rootPrettyVersion),
       "version": phpQuote(rootVersion),
-      "reference": "NULL",
+      "reference": rootVersionInfo.reference.map(phpQuote) ?? "null",
       "type": phpQuote(rootType),
       "install_path": "__DIR__ . '/../../'",
-      "aliases": "array()",
+      "aliases": phpList(rootVersionInfo.aliases),
       "dev_requirement": "false",
     ]
 
@@ -82,17 +102,21 @@ enum ComposerInstalledVersionsGenerator {
         else {
           continue
         }
-        versions[name] = installedPackageFields(package, name: name)
+        versions[name] = installedPackageFields(
+          package,
+          name: name,
+          development: developmentPackages.contains(name)
+        )
         addVirtualPackages(
           from: package["replace"],
           field: "replaced",
-          development: package["dev_requirement"]?.boolValue ?? false,
+          development: developmentPackages.contains(name),
           to: &versions
         )
         addVirtualPackages(
           from: package["provide"],
           field: "provided",
-          development: package["dev_requirement"]?.boolValue ?? false,
+          development: developmentPackages.contains(name),
           to: &versions
         )
       }
@@ -113,8 +137,8 @@ enum ComposerInstalledVersionsGenerator {
 
     let root = phpAssociativeArray(rootFields, indentation: 2)
     let versionEntries = versions.sorted { $0.key < $1.key }.map { name, fields in
-      "        \(phpQuote(name)) => \(phpAssociativeArray(fields, indentation: 2))"
-    }.joined(separator: ",\n")
+      "        \(phpQuote(name)) => \(phpAssociativeArray(fields, indentation: 3)),"
+    }.joined(separator: "\n")
 
     return """
       <?php return array(
@@ -128,20 +152,26 @@ enum ComposerInstalledVersionsGenerator {
 
   private static func installedPackageFields(
     _ package: [String: JSONValue],
-    name: String
+    name: String,
+    development: Bool
   ) -> [String: String] {
     let prettyVersion = package["version"]?.stringValue
     let normalizedVersion = package["version_normalized"]?.stringValue ?? prettyVersion
     let type = package["type"]?.stringValue ?? "library"
-    let reference =
-      nestedString(in: package, object: "source", field: "reference")
-      ?? nestedString(in: package, object: "dist", field: "reference")
+    let reference: String?
+    if package["installation-source"]?.stringValue == "source" {
+      reference = nestedString(in: package, object: "source", field: "reference")
+        ?? nestedString(in: package, object: "dist", field: "reference")
+    } else {
+      reference = nestedString(in: package, object: "dist", field: "reference")
+        ?? nestedString(in: package, object: "source", field: "reference")
+    }
     let aliases = package["aliases"]?.arrayValue?.compactMap(\.stringValue) ?? []
     let installPath: String
     if case .null? = package["install-path"] {
       installPath = "NULL"
     } else {
-      let path = package["install-path"]?.stringValue ?? "../\(name)"
+      let path = package["install-path"]?.stringValue ?? installedJSONPath(for: name)
       installPath = "__DIR__ . \(phpQuote("/\(path)"))"
     }
 
@@ -149,7 +179,7 @@ enum ComposerInstalledVersionsGenerator {
       "type": phpQuote(type),
       "install_path": installPath,
       "aliases": phpList(aliases),
-      "dev_requirement": (package["dev_requirement"]?.boolValue ?? false) ? "true" : "false",
+      "dev_requirement": development ? "true" : "false",
     ]
     if let prettyVersion {
       fields["pretty_version"] = phpQuote(prettyVersion)
@@ -157,8 +187,86 @@ enum ComposerInstalledVersionsGenerator {
     if let normalizedVersion {
       fields["version"] = phpQuote(normalizedVersion)
     }
-    fields["reference"] = reference.map(phpQuote) ?? "NULL"
+    fields["reference"] = reference.map(phpQuote) ?? "null"
     return fields
+  }
+
+  private static func rootVersionInfo(
+    rootManifest: ComposerManifest,
+    projectDirectoryURL: URL
+  ) -> (prettyVersion: String, version: String, reference: String?, aliases: [String]) {
+    if let prettyVersion = rootManifest["version"]?.stringValue {
+      return (
+        prettyVersion,
+        rootManifest["version_normalized"]?.stringValue ?? normalizedVersion(prettyVersion),
+        nil,
+        []
+      )
+    }
+    if let git = gitHead(in: projectDirectoryURL) {
+      let prettyVersion = "dev-\(git.branch)"
+      let aliases: [String]
+      if case .object(let extra)? = rootManifest["extra"],
+        case .object(let branchAliases)? = extra["branch-alias"],
+        let alias = branchAliases[prettyVersion]?.stringValue
+      {
+        aliases = [alias]
+      } else {
+        aliases = []
+      }
+      return (prettyVersion, prettyVersion, git.reference, aliases)
+    }
+    return ("1.0.0+no-version-set", "1.0.0.0", nil, [])
+  }
+
+  private static func normalizedVersion(_ version: String) -> String {
+    guard let parsed = try? ComposerVersion(version) else { return version }
+    return "\(parsed.major).\(parsed.minor).\(parsed.patch).\(parsed.build)"
+  }
+
+  private static func gitHead(in projectDirectoryURL: URL) -> (branch: String, reference: String)? {
+    let fileManager = FileManager.default
+    let dotGit = projectDirectoryURL.appendingPathComponent(".git")
+    let gitDirectory: URL
+    var isDirectory: ObjCBool = false
+    if fileManager.fileExists(atPath: dotGit.path, isDirectory: &isDirectory), isDirectory.boolValue {
+      gitDirectory = dotGit
+    } else if let contents = try? String(contentsOf: dotGit, encoding: .utf8),
+      contents.hasPrefix("gitdir:")
+    {
+      let relative = contents.dropFirst("gitdir:".count)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+      gitDirectory = URL(fileURLWithPath: relative, relativeTo: projectDirectoryURL)
+        .standardizedFileURL
+    } else {
+      return nil
+    }
+    let headURL = gitDirectory.appendingPathComponent("HEAD")
+    guard let head = try? String(contentsOf: headURL, encoding: .utf8)
+      .trimmingCharacters(in: .whitespacesAndNewlines),
+      head.hasPrefix("ref: ")
+    else {
+      return nil
+    }
+    let ref = String(head.dropFirst(5))
+    guard ref.hasPrefix("refs/heads/") else { return nil }
+    let branch = String(ref.dropFirst("refs/heads/".count))
+    let refURL = gitDirectory.appendingPathComponent(ref)
+    if let reference = try? String(contentsOf: refURL, encoding: .utf8)
+      .trimmingCharacters(in: .whitespacesAndNewlines), !reference.isEmpty
+    {
+      return (branch, reference)
+    }
+    let packedRefsURL = gitDirectory.appendingPathComponent("packed-refs")
+    if let packedRefs = try? String(contentsOf: packedRefsURL, encoding: .utf8) {
+      for line in packedRefs.split(separator: "\n") where !line.hasPrefix("#") {
+        let components = line.split(separator: " ", maxSplits: 1)
+        if components.count == 2, components[1] == Substring(ref) {
+          return (branch, String(components[0]))
+        }
+      }
+    }
+    return nil
   }
 
   private static func addVirtualPackages(
@@ -171,6 +279,7 @@ enum ComposerInstalledVersionsGenerator {
       return
     }
     for (name, constraintValue) in packages.sorted(by: { $0.key < $1.key }) {
+      guard !ComposerPlatformPackage.isPlatformName(name) else { continue }
       guard let constraint = constraintValue.stringValue else {
         continue
       }
@@ -183,9 +292,19 @@ enum ComposerInstalledVersionsGenerator {
       if !constraints.contains(constraint) {
         constraints.append(constraint)
       }
+      constraints.sort {
+        $0.compare($1, options: [.caseInsensitive, .numeric]) == .orderedAscending
+      }
       fields[field] = phpList(constraints)
       versions[name] = fields
     }
+  }
+
+  private static func installedJSONPath(for packageName: String) -> String {
+    if packageName.hasPrefix("composer/") {
+      return "./" + String(packageName.dropFirst("composer/".count))
+    }
+    return "../\(packageName)"
   }
 
   private static func nestedString(
@@ -220,14 +339,16 @@ enum ComposerInstalledVersionsGenerator {
     "'\(value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'"))'"
   }
 
-  private static func phpList(_ values: [String]) -> String {
+  private static func phpList(_ values: [String], indentation: Int = 4) -> String {
     guard !values.isEmpty else {
       return "array()"
     }
+    let spaces = String(repeating: "    ", count: indentation)
+    let closingSpaces = String(repeating: "    ", count: max(0, indentation - 1))
     let entries = values.enumerated().map { index, value in
-      "\(index) => \(phpQuote(value))"
-    }.joined(separator: ", ")
-    return "array(\(entries))"
+      "\(spaces)\(index) => \(phpQuote(value)),"
+    }.joined(separator: "\n")
+    return "array(\n\(entries)\n\(closingSpaces))"
   }
 
   private static func phpListValues(_ source: String) -> [String] {

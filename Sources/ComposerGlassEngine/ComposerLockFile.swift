@@ -25,6 +25,7 @@ public enum ComposerLockSection: String, CaseIterable, Sendable {
 /// A package entry from `composer.lock` that retains unsupported metadata.
 public struct ComposerLockedPackage: Equatable, Sendable {
   public private(set) var fields: [String: JSONValue]
+  var jsonKeyOrders: [String: [String]]
 
   public init(
     name: String,
@@ -40,6 +41,7 @@ public struct ComposerLockedPackage: Equatable, Sendable {
     self.fields = fields
     self.fields["name"] = .string(name)
     self.fields["version"] = .string(version)
+    self.jsonKeyOrders = [:]
   }
 
   public var name: String {
@@ -79,7 +81,10 @@ public struct ComposerLockedPackage: Equatable, Sendable {
     fields[key]
   }
 
-  fileprivate init(validating fields: [String: JSONValue]) throws {
+  fileprivate init(
+    validating fields: [String: JSONValue],
+    jsonKeyOrders: [String: [String]] = [:]
+  ) throws {
     guard let name = fields["name"]?.stringValue else {
       throw ComposerLockError.missingField("name")
     }
@@ -90,12 +95,14 @@ public struct ComposerLockedPackage: Equatable, Sendable {
       throw ComposerLockError.missingField("version")
     }
     self.fields = fields
+    self.jsonKeyOrders = jsonKeyOrders
   }
 }
 
 /// A structure-preserving representation of `composer.lock`.
 public struct ComposerLockFile: Equatable, Sendable {
   public private(set) var fields: [String: JSONValue]
+  private var jsonKeyOrders: [String: [String]]
 
   public init(
     contentHash: String,
@@ -104,6 +111,7 @@ public struct ComposerLockFile: Equatable, Sendable {
     fields: [String: JSONValue] = [:]
   ) throws {
     self.fields = fields
+    self.jsonKeyOrders = [:]
     self.fields["content-hash"] = .string(contentHash)
     try setPackages(packages, in: .runtime)
     try setPackages(developmentPackages, in: .development)
@@ -114,7 +122,10 @@ public struct ComposerLockFile: Equatable, Sendable {
     guard case .object(let fields) = value else {
       throw ComposerLockError.rootIsNotObject
     }
-    let lockFile = ComposerLockFile(fields: fields)
+    let lockFile = ComposerLockFile(
+      fields: fields,
+      jsonKeyOrders: JSONKeyOrderParser.parse(data)
+    )
     try lockFile.validate()
     return lockFile
   }
@@ -131,17 +142,33 @@ public struct ComposerLockFile: Equatable, Sendable {
     fields["plugin-api-version"]?.stringValue
   }
 
+  var wasGeneratedByComposerGlassEngine: Bool {
+    fields["_readme"]?.arrayValue?.contains {
+      $0.stringValue?.contains("ComposerGlassEngine") == true
+    } == true
+  }
+
   public func packages(
     in section: ComposerLockSection = .runtime
   ) throws -> [ComposerLockedPackage] {
     guard case .array(let values)? = fields[section.lockKey] else {
       throw ComposerLockError.invalidField(section.lockKey)
     }
-    return try values.map { value in
+    return try values.enumerated().map { index, value in
       guard case .object(let packageFields) = value else {
         throw ComposerLockError.invalidField(section.lockKey)
       }
-      return try ComposerLockedPackage(validating: packageFields)
+      let prefix = "/\(section.lockKey)/\(index)"
+      let packageOrderPairs: [(String, [String])] = jsonKeyOrders.compactMap {
+        path, order -> (String, [String])? in
+          guard path == prefix || path.hasPrefix(prefix + "/") else { return nil }
+          return (String(path.dropFirst(prefix.count)), order)
+        }
+      let packageOrders = Dictionary(uniqueKeysWithValues: packageOrderPairs)
+      return try ComposerLockedPackage(
+        validating: packageFields,
+        jsonKeyOrders: packageOrders
+      )
     }
   }
 
@@ -174,15 +201,11 @@ public struct ComposerLockFile: Equatable, Sendable {
   }
 
   public func encoded(prettyPrinted: Bool = true) throws -> Data {
-    let encoder = JSONEncoder()
-    var formatting: JSONEncoder.OutputFormatting = [
-      .sortedKeys,
-      .withoutEscapingSlashes,
-    ]
     if prettyPrinted {
-      formatting.insert(.prettyPrinted)
+      return ComposerJSONWriter.data(.object(fields), rootOrder: ComposerJSONWriter.lockRootOrder)
     }
-    encoder.outputFormatting = formatting
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.withoutEscapingSlashes]
     return try encoder.encode(JSONValue.object(fields))
   }
 
@@ -191,8 +214,12 @@ public struct ComposerLockFile: Equatable, Sendable {
     set { fields[key] = newValue }
   }
 
-  private init(fields: [String: JSONValue]) {
+  private init(
+    fields: [String: JSONValue],
+    jsonKeyOrders: [String: [String]] = [:]
+  ) {
     self.fields = fields
+    self.jsonKeyOrders = jsonKeyOrders
   }
 
   private func validate() throws {

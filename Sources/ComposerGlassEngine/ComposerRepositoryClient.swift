@@ -143,7 +143,7 @@ public actor ComposerRepositoryClient {
 
     let index = try await loadIndex()
     if let inline = try index.inlinePackages(named: name) {
-      return inline
+      return inline.map { $0.withRepositoryNotificationURL(index.notificationURL) }
     }
     guard index.mayContain(package: name) else {
       return []
@@ -164,7 +164,7 @@ public actor ComposerRepositoryClient {
         template: template
       )
     }
-    return packages
+    return packages.map { $0.withRepositoryNotificationURL(index.notificationURL) }
   }
 
   public func providerPackages(

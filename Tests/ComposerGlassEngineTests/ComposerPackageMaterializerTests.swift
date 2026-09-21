@@ -44,10 +44,7 @@ struct ComposerPackageMaterializerTests {
     #expect(fields["dev"] == .bool(true))
     #expect(fields["dev-package-names"] == .array([.string("vendor/testing")]))
     let packages = try #require(fields["packages"]?.arrayValue)
-    let developmentFlags = packages.compactMap(\.objectValue).compactMap {
-      $0["dev_requirement"]
-    }
-    #expect(developmentFlags == [.bool(false), .bool(true)])
+    #expect(packages.compactMap(\.objectValue).allSatisfy { $0["dev_requirement"] == nil })
   }
 
   @Test("Lock file installation can exclude development packages")
@@ -81,6 +78,37 @@ struct ComposerPackageMaterializerTests {
 
     #expect(result.packages.map(\.packageName) == ["vendor/runtime"])
     #expect(await transport.requestCount == 1)
+  }
+
+  @Test("Packages in the composer namespace use Composer-relative install paths")
+  func materializesComposerNamespacePath() async throws {
+    let workspace = try zipTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: workspace) }
+    let package = try lockedPackage(name: "composer/pcre", path: "pcre.zip")
+    let lockFile = try ComposerLockFile(
+      contentHash: String(repeating: "0", count: 32),
+      packages: [package]
+    )
+    let transport = MaterializerArchiveTransport(payloads: [
+      "https://dist.example.test/pcre.zip": makeZIP([
+        ZIPTestEntry(name: "pcre/src/Pcre.php", data: Data("pcre".utf8))
+      ])
+    ])
+    let materializer = ComposerPackageMaterializer(
+      downloader: try ComposerPackageDownloader(
+        cacheDirectory: workspace.appendingPathComponent("cache"),
+        transport: transport
+      )
+    )
+    let vendorURL = workspace.appendingPathComponent("vendor")
+
+    _ = try await materializer.materialize(lockFile, at: vendorURL)
+
+    let installed = try String(
+      contentsOf: vendorURL.appendingPathComponent("composer/installed.json"),
+      encoding: .utf8
+    )
+    #expect(installed.contains(#""install-path": "./pcre""#))
   }
 
   @Test("Resolved packages form a deterministic vendor tree with installed metadata")
@@ -209,7 +237,12 @@ struct ComposerPackageMaterializerTests {
       )
     )
     let firstVendorURL = workspace.appendingPathComponent("first-vendor")
-    _ = try await firstMaterializer.materialize(lockFile, at: firstVendorURL)
+    let reuseMetadataURL = workspace.appendingPathComponent("package-reuse.json")
+    _ = try await firstMaterializer.materialize(
+      lockFile,
+      at: firstVendorURL,
+      reuseMetadataURL: reuseMetadataURL
+    )
     #expect(await transport.requestCount == 1)
 
     let secondMaterializer = ComposerPackageMaterializer(
@@ -222,7 +255,8 @@ struct ComposerPackageMaterializerTests {
     let reused = try await secondMaterializer.materialize(
       lockFile,
       at: secondVendorURL,
-      reusingPackagesFrom: firstVendorURL
+      reusingPackagesFrom: firstVendorURL,
+      reuseMetadataURL: reuseMetadataURL
     )
 
     #expect(reused.packages.map(\.wasReused) == [true])
@@ -239,7 +273,8 @@ struct ComposerPackageMaterializerTests {
     let rebuilt = try await secondMaterializer.materialize(
       lockFile,
       at: thirdVendorURL,
-      reusingPackagesFrom: firstVendorURL
+      reusingPackagesFrom: firstVendorURL,
+      reuseMetadataURL: reuseMetadataURL
     )
 
     #expect(rebuilt.packages.map(\.wasReused) == [false])

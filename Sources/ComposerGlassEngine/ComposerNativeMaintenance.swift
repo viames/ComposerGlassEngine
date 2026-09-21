@@ -89,7 +89,8 @@ public actor ComposerNativeMaintenance {
       rootManifest: manifest,
       projectDirectoryURL: projectURL,
       vendorDirectoryURL: stagedVendor,
-      includeDevelopmentAutoload: includeDevelopmentAutoload
+      includeDevelopmentAutoload: includeDevelopmentAutoload,
+      regenerateInstalledMetadata: false
     )
     try Task.checkCancellation()
     await progress?(.generatingBinaries)

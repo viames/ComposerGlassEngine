@@ -49,13 +49,28 @@ public struct ComposerConstraint: Equatable, Sendable {
       return hyphenPredicates
     }
 
-    let tokens =
+    let rawTokens =
       trimmed
       .replacingOccurrences(of: ",", with: " ")
       .split(whereSeparator: \.isWhitespace)
       .map(String.init)
-    guard !tokens.isEmpty else {
+    guard !rawTokens.isEmpty else {
       throw ComposerConstraintError.empty
+    }
+    // Composer accepts both `>=5.3.0` and `>= 5.3.0`. Whitespace splitting
+    // separates the latter operator from its version, so join comparison
+    // operators with the following token before parsing predicates.
+    let comparisonOperators = Set([">=", "<=", "!=", "==", ">", "<", "="])
+    var tokens: [String] = []
+    var index = 0
+    while index < rawTokens.count {
+      if comparisonOperators.contains(rawTokens[index]), index + 1 < rawTokens.count {
+        tokens.append(rawTokens[index] + rawTokens[index + 1])
+        index += 2
+      } else {
+        tokens.append(rawTokens[index])
+        index += 1
+      }
     }
     return try tokens.flatMap(parseToken)
   }

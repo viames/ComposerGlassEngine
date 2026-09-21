@@ -72,7 +72,7 @@ struct ComposerAutoloadGeneratorTests {
       encoding: .utf8
     )
     #expect(psr4.contains("'Acme\\\\Library\\\\'"))
-    #expect(psr4.contains("'/../acme/library/src'"))
+    #expect(psr4.contains("$vendorDir . '/acme/library/src'"))
     #expect(psr4.contains("'Root\\\\'"))
     #expect(psr4.contains("'RootTests\\\\'"))
     let classmap = try String(
@@ -82,13 +82,13 @@ struct ComposerAutoloadGeneratorTests {
     #expect(classmap.contains("'Acme\\\\Mapped\\\\RealClass'"))
     #expect(classmap.contains("'Acme\\\\Mapped\\\\RealContract'"))
     #expect(classmap.contains("'Composer\\\\InstalledVersions'"))
-    #expect(classmap.contains("'/../composer/InstalledVersions.php'"))
+    #expect(classmap.contains("$vendorDir . '/composer/InstalledVersions.php'"))
     #expect(!classmap.contains("FakeComment"))
     let real = try String(
       contentsOf: vendorURL.appendingPathComponent("composer/autoload_real.php"),
       encoding: .utf8
     )
-    #expect(real.contains("ComposerGlassAutoloaderInit"))
+    #expect(real.contains("ComposerAutoloaderInit"))
     #expect(real.contains("$loader->register(true)"))
     let installedVersionsURL = vendorURL.appendingPathComponent(
       "composer/InstalledVersions.php"
@@ -102,7 +102,8 @@ struct ComposerAutoloadGeneratorTests {
     #expect(installedPHP.contains("'acme/library' => array("))
     #expect(installedPHP.contains("'version' => '1.2.3.0'"))
     #expect(installedPHP.contains("'acme/virtual' => array("))
-    #expect(installedPHP.contains("'provided' => array(0 => '^1.0')"))
+    #expect(installedPHP.contains("'provided' => array("))
+    #expect(installedPHP.contains("0 => '^1.0',"))
 
     if let phpURL = phpExecutableURL() {
       let output = Pipe()
@@ -148,6 +149,55 @@ struct ComposerAutoloadGeneratorTests {
       encoding: .utf8
     )
     #expect(!psr4.contains("RootTests"))
+  }
+
+  @Test("Optimized autoload scans PSR paths and honors classmap exclusions")
+  func optimizesPSRClassmaps() throws {
+    let workspace = try zipTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: workspace) }
+    let vendorURL = workspace.appendingPathComponent("vendor")
+    let includedURL = workspace.appendingPathComponent("src/Included")
+    let excludedURL = workspace.appendingPathComponent("src/Excluded")
+    try FileManager.default.createDirectory(at: vendorURL, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: includedURL, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: excludedURL, withIntermediateDirectories: true)
+    try Data(
+      """
+      <?php
+      namespace App;
+      final class IncludedType {
+          public function markup(): string {
+              return <<<HTML
+              class BogusType {}
+              HTML;
+          }
+      }
+      """.utf8
+    ).write(to: includedURL.appendingPathComponent("IncludedType.php"))
+    try Data("<?php namespace App; final class ExcludedType {}".utf8)
+      .write(to: excludedURL.appendingPathComponent("ExcludedType.php"))
+    let manifest = ComposerManifest(fields: [
+      "config": .object(["optimize-autoloader": .bool(true)]),
+      "autoload": .object([
+        "psr-4": .object(["App\\": .string("src/")]),
+        "exclude-from-classmap": .array([.string("src/Excluded/")]),
+      ]),
+    ])
+
+    let result = try ComposerAutoloadGenerator().generate(
+      rootManifest: manifest,
+      projectDirectoryURL: workspace,
+      vendorDirectoryURL: vendorURL
+    )
+
+    #expect(result.classmapCount == 2)
+    let classmap = try String(
+      contentsOf: vendorURL.appendingPathComponent("composer/autoload_classmap.php"),
+      encoding: .utf8
+    )
+    #expect(classmap.contains("'App\\\\IncludedType'"))
+    #expect(!classmap.contains("ExcludedType"))
+    #expect(!classmap.contains("BogusType"))
   }
 
   @Test("Autoload paths cannot escape their package")

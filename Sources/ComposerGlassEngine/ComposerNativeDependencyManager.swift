@@ -221,7 +221,13 @@ public actor ComposerNativeDependencyManager {
       )
     }
 
-    let manifestData = try manifest.encoded(prettyPrinted: true)
+    let manifestData: Data
+    let originalManifest = try ComposerManifest.decode(from: originalManifestData)
+    if manifest.fields == originalManifest.fields {
+      manifestData = originalManifestData
+    } else {
+      manifestData = try manifest.encoded(prettyPrinted: true)
+    }
     let lockFile = try lockGenerator.generate(
       manifest: manifest,
       manifestData: manifestData,

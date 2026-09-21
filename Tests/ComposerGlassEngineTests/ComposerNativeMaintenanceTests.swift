@@ -14,6 +14,13 @@ struct ComposerNativeMaintenanceTests {
     ).write(to: project.appendingPathComponent("composer.json"))
     let vendor = project.appendingPathComponent("vendor", isDirectory: true)
     try FileManager.default.createDirectory(at: vendor, withIntermediateDirectories: true)
+    let composerDirectory = vendor.appendingPathComponent("composer", isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: composerDirectory,
+      withIntermediateDirectories: true
+    )
+    let installedPHP = composerDirectory.appendingPathComponent("installed.php")
+    try Data("<?php return 'preserved';\n".utf8).write(to: installedPHP)
     let marker = vendor.appendingPathComponent("before.txt")
     try Data("before".utf8).write(to: marker)
     let maintenance = ComposerNativeMaintenance(
@@ -25,6 +32,7 @@ struct ComposerNativeMaintenanceTests {
     #expect(
       FileManager.default.fileExists(atPath: vendor.appendingPathComponent("autoload.php").path))
     #expect(FileManager.default.fileExists(atPath: marker.path))
+    #expect(try String(contentsOf: installedPHP, encoding: .utf8) == "<?php return 'preserved';\n")
 
     try await maintenance.rollback(result)
 

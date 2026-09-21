@@ -53,7 +53,6 @@ public struct ComposerMaterializationResult: Equatable, Sendable {
 /// Builds a complete new vendor tree from resolved packages. The destination
 /// must not exist and is removed in full if any package fails.
 public actor ComposerPackageMaterializer {
-  private static let reuseManifestName = "composerglass-packages.json"
 
   private struct PlannedPackage: Sendable {
     let package: ComposerRepositoryPackage
@@ -142,18 +141,26 @@ public actor ComposerPackageMaterializer {
     includeDevelopmentPackages: Bool = true,
     at vendorDirectoryURL: URL,
     reusingPackagesFrom existingVendorDirectoryURL: URL? = nil,
+    reuseMetadataURL: URL? = nil,
     progress: (@Sendable (ComposerPackageMaterializationProgress) async -> Void)? = nil
   ) async throws -> ComposerMaterializationResult {
+    let preserveJSONKeyOrder = !lockFile.wasGeneratedByComposerGlassEngine
     var packages = try lockFile.packages().map {
       PlannedPackage(
-        package: try repositoryPackage(from: $0),
+        package: try repositoryPackage(
+          from: $0,
+          preserveJSONKeyOrder: preserveJSONKeyOrder
+        ),
         isDevelopment: false
       )
     }
     if includeDevelopmentPackages {
       packages += try lockFile.packages(in: .development).map {
         PlannedPackage(
-          package: try repositoryPackage(from: $0),
+          package: try repositoryPackage(
+            from: $0,
+            preserveJSONKeyOrder: preserveJSONKeyOrder
+          ),
           isDevelopment: true
         )
       }
@@ -162,6 +169,8 @@ public actor ComposerPackageMaterializer {
       packages: packages,
       at: vendorDirectoryURL,
       reusingPackagesFrom: existingVendorDirectoryURL,
+      reuseMetadataURL: reuseMetadataURL,
+      developmentMode: includeDevelopmentPackages,
       progress: progress
     )
   }
@@ -170,6 +179,8 @@ public actor ComposerPackageMaterializer {
     packages: [PlannedPackage],
     at vendorDirectoryURL: URL,
     reusingPackagesFrom existingVendorDirectoryURL: URL? = nil,
+    reuseMetadataURL: URL? = nil,
+    developmentMode: Bool = false,
     progress: (@Sendable (ComposerPackageMaterializationProgress) async -> Void)?
   ) async throws -> ComposerMaterializationResult {
     guard !fileManager.fileExists(atPath: vendorDirectoryURL.path) else {
@@ -205,7 +216,7 @@ public actor ComposerPackageMaterializer {
       at: extractionDirectory,
       withIntermediateDirectories: false
     )
-    let reusablePackages = readReuseRecords(from: existingVendorDirectoryURL)
+    let reusablePackages = readReuseRecords(from: reuseMetadataURL)
     let progressReporter = ProgressReporter()
     let packagesToPrepare = sortedPackages.enumerated().filter {
       $0.element.package.packageType != "metapackage"
@@ -281,9 +292,12 @@ public actor ComposerPackageMaterializer {
     try fileManager.removeItem(at: extractionDirectory)
     try writeInstalledMetadata(
       packages: sortedPackages,
+      developmentMode: developmentMode,
       to: vendorDirectoryURL
     )
-    try writeReuseManifest(reuseRecords, to: vendorDirectoryURL)
+    if let reuseMetadataURL {
+      try writeReuseManifest(reuseRecords, to: reuseMetadataURL)
+    }
     succeeded = true
     return ComposerMaterializationResult(
       vendorDirectoryURL: vendorDirectoryURL,
@@ -436,15 +450,10 @@ public actor ComposerPackageMaterializer {
     )
   }
 
-  private func readReuseRecords(
-    from vendorDirectoryURL: URL?
-  ) -> [String: ReuseRecord] {
-    guard let vendorDirectoryURL else {
+  private func readReuseRecords(from manifestURL: URL?) -> [String: ReuseRecord] {
+    guard let manifestURL else {
       return [:]
     }
-    let manifestURL = vendorDirectoryURL
-      .appendingPathComponent("composer", isDirectory: true)
-      .appendingPathComponent(Self.reuseManifestName)
     guard let data = fileManager.contents(atPath: manifestURL.path),
       let manifest = try? JSONDecoder().decode(ReuseManifest.self, from: data),
       manifest.schemaVersion == 1
@@ -459,20 +468,17 @@ public actor ComposerPackageMaterializer {
 
   private func writeReuseManifest(
     _ packages: [ReuseRecord],
-    to vendorDirectoryURL: URL
+    to manifestURL: URL
   ) throws {
-    let composerDirectory = vendorDirectoryURL.appendingPathComponent(
-      "composer",
-      isDirectory: true
+    try fileManager.createDirectory(
+      at: manifestURL.deletingLastPathComponent(),
+      withIntermediateDirectories: true
     )
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
     try encoder.encode(
       ReuseManifest(schemaVersion: 1, packages: packages)
-    ).write(
-      to: composerDirectory.appendingPathComponent(Self.reuseManifestName),
-      options: .atomic
-    )
+    ).write(to: manifestURL, options: .atomic)
   }
 
   private static func identitySHA256(for package: ComposerRepositoryPackage) -> String {
@@ -571,6 +577,7 @@ public actor ComposerPackageMaterializer {
 
   private func writeInstalledMetadata(
     packages: [PlannedPackage],
+    developmentMode: Bool,
     to vendorDirectoryURL: URL
   ) throws {
     let composerDirectory = vendorDirectoryURL.appendingPathComponent(
@@ -586,9 +593,15 @@ public actor ComposerPackageMaterializer {
       fields["install-path"] =
         planned.package.packageType == "metapackage"
         ? .null
-        : .string("../\(planned.package.name)")
-      fields["dev_requirement"] = .bool(planned.isDevelopment)
+        : .string(Self.installedJSONPath(for: planned.package.name))
+      fields["installation-source"] = .string("dist")
       return .object(fields)
+    }
+    var jsonKeyOrders: [String: [String]] = [:]
+    for (index, planned) in packages.enumerated() {
+      for (path, order) in planned.package.jsonKeyOrders where !path.isEmpty {
+        jsonKeyOrders["/packages/\(index)\(path)"] = order
+      }
     }
     let developmentNames =
       packages
@@ -596,32 +609,190 @@ public actor ComposerPackageMaterializer {
       .map { JSONValue.string($0.package.name) }
     let document = JSONValue.object([
       "packages": .array(installedPackages),
-      "dev": .bool(!developmentNames.isEmpty),
+      "dev": .bool(developmentMode),
       "dev-package-names": .array(developmentNames),
     ])
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-    let data = try encoder.encode(document)
+    let data = Data(
+      (try Self.composerJSON(
+        document,
+        context: "root",
+        keyOrders: jsonKeyOrders
+      ) + "\n").utf8
+    )
     try data.write(
       to: composerDirectory.appendingPathComponent("installed.json"),
       options: .atomic
     )
   }
 
+  private static func composerJSON(
+    _ value: JSONValue,
+    level: Int = 0,
+    context: String,
+    keyOrders: [String: [String]] = [:],
+    path: String = ""
+  ) throws -> String {
+    switch value {
+    case .null:
+      return "null"
+    case .bool(let value):
+      return value ? "true" : "false"
+    case .number(let value):
+      let data = try JSONSerialization.data(
+        withJSONObject: value,
+        options: [.fragmentsAllowed, .withoutEscapingSlashes]
+      )
+      return String(decoding: data, as: UTF8.self)
+    case .string(let value):
+      let data = try JSONSerialization.data(
+        withJSONObject: value,
+        options: [.fragmentsAllowed, .withoutEscapingSlashes]
+      )
+      return String(decoding: data, as: UTF8.self)
+    case .array(let values):
+      guard !values.isEmpty else { return "[]" }
+      let indentation = String(repeating: " ", count: (level + 1) * 4)
+      let closing = String(repeating: " ", count: level * 4)
+      let entries = try values.enumerated().map { index, value in
+        let itemPath = childJSONPath(path, String(index))
+        return indentation + (try composerJSON(
+          value,
+          level: level + 1,
+          context: context,
+          keyOrders: keyOrders,
+          path: itemPath
+        ))
+      }.joined(separator: ",\n")
+      return "[\n\(entries)\n\(closing)]"
+    case .object(let fields):
+      guard !fields.isEmpty else { return "{}" }
+      let indentation = String(repeating: " ", count: (level + 1) * 4)
+      let closing = String(repeating: " ", count: level * 4)
+      let entries = try orderedKeys(
+        in: fields,
+        context: context,
+        preservedOrder: keyOrders[path]
+      ).map { key in
+        let encodedKey = try composerJSON(.string(key), context: "key")
+        let childContext = childJSONContext(parent: context, key: key)
+        let encodedValue = try composerJSON(
+          fields[key]!,
+          level: level + 1,
+          context: childContext,
+          keyOrders: keyOrders,
+          path: childJSONPath(path, key)
+        )
+        return "\(indentation)\(encodedKey): \(encodedValue)"
+      }.joined(separator: ",\n")
+      return "{\n\(entries)\n\(closing)}"
+    }
+  }
+
+  private static func orderedKeys(
+    in fields: [String: JSONValue],
+    context: String,
+    preservedOrder: [String]?
+  ) -> [String] {
+    if let preservedOrder, context != "root", context != "package" {
+      let known = preservedOrder.filter { fields[$0] != nil }
+      let remaining = fields.keys.filter { !known.contains($0) }.sorted()
+      return known + remaining
+    }
+    let preferred: [String]
+    switch context {
+    case "root":
+      preferred = ["packages", "dev", "dev-package-names"]
+    case "package":
+      preferred = [
+        "name", "version", "version_normalized", "target-dir", "source", "dist",
+        "require", "conflict", "provide", "replace", "require-dev", "suggest",
+        "time", "default-branch", "bin", "type", "extra", "installation-source",
+        "autoload", "autoload-dev", "notification-url", "include-path", "php-ext",
+        "archive", "scripts", "license", "authors", "description", "homepage",
+        "keywords", "repositories", "support", "funding", "abandoned",
+        "minimum-stability", "transport-options", "install-path",
+      ]
+    case "source", "dist":
+      preferred = ["type", "url", "reference", "shasum"]
+    case "author":
+      preferred = ["name", "email", "homepage", "role"]
+    case "autoload":
+      preferred = ["psr-4", "psr-0", "classmap", "files", "exclude-from-classmap"]
+    case "support":
+      preferred = ["issues", "source", "docs", "forum", "wiki", "irc", "email", "rss"]
+    case "funding":
+      preferred = ["url", "type"]
+    default:
+      preferred = []
+    }
+    let ranks = Dictionary(uniqueKeysWithValues: preferred.enumerated().map { ($0.element, $0.offset) })
+    return fields.keys.sorted {
+      let lhs = ranks[$0] ?? Int.max
+      let rhs = ranks[$1] ?? Int.max
+      return lhs == rhs ? $0 < $1 : lhs < rhs
+    }
+  }
+
+  private static func childJSONContext(parent: String, key: String) -> String {
+    if parent == "root", key == "packages" { return "package" }
+    if key == "authors" { return "author" }
+    if key == "funding" { return "funding" }
+    if ["source", "dist", "autoload", "support"].contains(key) { return key }
+    return key
+  }
+
+  private static func childJSONPath(_ parent: String, _ component: String) -> String {
+    let escaped = component
+      .replacingOccurrences(of: "~", with: "~0")
+      .replacingOccurrences(of: "/", with: "~1")
+    return parent + "/" + escaped
+  }
+
+  private static func installedJSONPath(for packageName: String) -> String {
+    if packageName.hasPrefix("composer/") {
+      return "./" + String(packageName.dropFirst("composer/".count))
+    }
+    return "../\(packageName)"
+  }
+
   private func repositoryPackage(
-    from lockedPackage: ComposerLockedPackage
+    from lockedPackage: ComposerLockedPackage,
+    preserveJSONKeyOrder: Bool = true
   ) throws -> ComposerRepositoryPackage {
     var additionalFields = lockedPackage.fields
     additionalFields.removeValue(forKey: "name")
     additionalFields.removeValue(forKey: "version")
     additionalFields.removeValue(forKey: "version_normalized")
     additionalFields.removeValue(forKey: "require")
-    return try ComposerRepositoryPackage(
+    var package = try ComposerRepositoryPackage(
       name: lockedPackage.name,
       version: lockedPackage.version,
-      normalizedVersion: lockedPackage["version_normalized"]?.stringValue,
+      normalizedVersion: lockedPackage["version_normalized"]?.stringValue
+        ?? Self.normalizedVersion(lockedPackage.version),
       requirements: try lockedPackage.requirements(),
       additionalFields: additionalFields
     )
+    package.jsonKeyOrders = preserveJSONKeyOrder ? lockedPackage.jsonKeyOrders : [:]
+    return package
+  }
+
+  private static func normalizedVersion(_ version: String) -> String? {
+    guard let parsed = try? ComposerVersion(version) else {
+      return nil
+    }
+    var result = "\(parsed.major).\(parsed.minor).\(parsed.patch).\(parsed.build)"
+    switch parsed.stability {
+    case .development:
+      result += "-dev"
+    case .alpha:
+      result += "-alpha\(parsed.stabilityNumber)"
+    case .beta:
+      result += "-beta\(parsed.stabilityNumber)"
+    case .releaseCandidate:
+      result += "-RC\(parsed.stabilityNumber)"
+    case .stable:
+      break
+    }
+    return result
   }
 }

@@ -149,7 +149,8 @@ public actor ComposerNativeInstaller {
       lockFile,
       includeDevelopmentPackages: options.includeDevelopmentPackages,
       at: stagedVendorURL,
-      reusingPackagesFrom: projectURL.appendingPathComponent("vendor", isDirectory: true)
+      reusingPackagesFrom: projectURL.appendingPathComponent("vendor", isDirectory: true),
+      reuseMetadataURL: stateURL.appendingPathComponent("package-reuse.json")
     ) { event in
       switch event {
       case .downloading(let package, let completed, let total):

@@ -27,6 +27,9 @@ public struct ComposerManifest: Equatable, Sendable {
     prettyPrinted: Bool = true,
     sortedKeys: Bool = false
   ) throws -> Data {
+    if prettyPrinted && !sortedKeys {
+      return ComposerJSONWriter.data(.object(fields))
+    }
     let encoder = JSONEncoder()
     var formatting: JSONEncoder.OutputFormatting = [.withoutEscapingSlashes]
     if prettyPrinted {

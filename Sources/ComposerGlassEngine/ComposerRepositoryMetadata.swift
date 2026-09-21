@@ -31,6 +31,10 @@ public struct ComposerRepositoryIndex: Equatable, Sendable {
     fields["providers-api"]?.stringValue
   }
 
+  public var notificationURL: String? {
+    fields["notify-batch"]?.stringValue ?? fields["notify"]?.stringValue
+  }
+
   public var availablePackages: [String]? {
     guard case .array(let values)? = fields["available-packages"] else {
       return nil
@@ -81,9 +85,11 @@ public struct ComposerRepositoryIndex: Equatable, Sendable {
 /// One installable version returned by a Composer repository.
 public struct ComposerRepositoryPackage: Equatable, Sendable {
   public private(set) var fields: [String: JSONValue]
+  var jsonKeyOrders: [String: [String]]
 
   private init(fields: [String: JSONValue]) {
     self.fields = fields
+    self.jsonKeyOrders = [:]
   }
 
   /// Creates package metadata for custom repositories and deterministic tests.
@@ -119,6 +125,7 @@ public struct ComposerRepositoryPackage: Equatable, Sendable {
       ? nil
       : .object(requirements.mapValues(JSONValue.string))
     self.fields = fields
+    self.jsonKeyOrders = [:]
   }
 
   public var name: String {
@@ -205,6 +212,13 @@ public struct ComposerRepositoryPackage: Equatable, Sendable {
 
   public subscript(_ key: String) -> JSONValue? {
     fields[key]
+  }
+
+  func withRepositoryNotificationURL(_ url: String?) -> ComposerRepositoryPackage {
+    guard fields["notification-url"] == nil, let url else { return self }
+    var copy = self
+    copy.fields["notification-url"] = .string(url)
+    return copy
   }
 
   static func decodeCollection(
