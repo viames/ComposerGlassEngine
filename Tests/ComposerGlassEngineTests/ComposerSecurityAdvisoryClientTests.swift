@@ -5,11 +5,23 @@ import Testing
 
 @Suite("Composer security advisory client")
 struct ComposerSecurityAdvisoryClientTests {
+  @Test("Packagist source spelling round trips without losing advisory identity")
+  func packagistSourceCoding() throws {
+    let source = try JSONDecoder().decode(
+      ComposerSecurityAdvisorySource.self,
+      from: Data(#"{"name":"GitHub","remoteId":"GHSA-example"}"#.utf8)
+    )
+    #expect(source.remoteID == "GHSA-example")
+    let encoded = try JSONEncoder().encode(source)
+    let object = try JSONSerialization.jsonObject(with: encoded) as? [String: String]
+    #expect(object?["remoteId"] == "GHSA-example")
+    #expect(object?["remoteID"] == nil)
+  }
   @Test("Audit retains only advisories affecting installed versions")
   func filtersAdvisoriesByInstalledVersion() async throws {
     let transport = AdvisoryStubTransport(
       responseData: Data(
-        #"{"advisories":{"vendor/app":[{"advisoryId":"PKSA-test-1","packageName":"vendor/app","title":"Affected","link":"https://example.com/advisory","cve":"CVE-2026-0001","affectedVersions":"<1.2.0","sources":[{"name":"GitHub","remoteID":"GHSA-test"}],"reportedAt":"2026-01-01T00:00:00+00:00","severity":"high"},{"advisoryId":"PKSA-test-2","packageName":"vendor/app","title":"Not affected","link":null,"cve":null,"affectedVersions":">=2.0.0","sources":[],"reportedAt":null,"severity":null}]}}"#
+        #"{"advisories":{"vendor/app":[{"advisoryId":"PKSA-test-1","packageName":"vendor/app","title":"Affected","link":"https://example.com/advisory","cve":"CVE-2026-0001","affectedVersions":"<1.2.0","sources":[{"name":"GitHub","remoteId":"GHSA-test"}],"reportedAt":"2026-01-01T00:00:00+00:00","severity":"high"},{"advisoryId":"PKSA-test-2","packageName":"vendor/app","title":"Not affected","link":null,"cve":null,"affectedVersions":">=2.0.0","sources":[],"reportedAt":null,"severity":null}]}}"#
           .utf8
       )
     )

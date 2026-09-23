@@ -11,6 +11,11 @@ public struct ComposerSecurityAdvisorySource: Equatable, Codable, Sendable {
   public let name: String
   public let remoteID: String
 
+  private enum CodingKeys: String, CodingKey {
+    case name
+    case remoteID = "remoteId"
+  }
+
   public init(name: String, remoteID: String) {
     self.name = name
     self.remoteID = remoteID
