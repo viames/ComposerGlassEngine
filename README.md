@@ -2,11 +2,15 @@
 
 [Documentazione italiana](README.it.md)
 
+[![CI](https://github.com/viames/ComposerGlassEngine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/viames/ComposerGlassEngine/actions/workflows/ci.yml?query=branch%3Amain)
+[![Latest release](https://img.shields.io/github/v/release/viames/ComposerGlassEngine)](https://github.com/viames/ComposerGlassEngine/releases/latest)
+[![License](https://img.shields.io/github/license/viames/ComposerGlassEngine)](LICENSE)
+
 ComposerGlass Engine is an independent, unofficial Composer-compatible
 dependency engine written in Swift. It is not affiliated with or endorsed by
 the Composer project.
 
-The current behavioral baseline is Composer `2.10.3`, tag `2.10.3`, commit
+The current `0.2.x` behavioral baseline is Composer `2.10.3`, tag `2.10.3`, commit
 `f0de0bf90226853b841672f086d8b58b02332504`. See
 [COMPOSER-UPSTREAM.md](COMPOSER-UPSTREAM.md) for the machine-readable reference
 and the future-release comparison workflow.

@@ -7,6 +7,10 @@ versions may contain source-breaking API improvements.
 
 ## Unreleased
 
+No changes yet.
+
+## 0.2.0 — 2026-09-25
+
 ### Added
 
 - A versioned Composer `2.10.3` upstream baseline, public Swift metadata,
