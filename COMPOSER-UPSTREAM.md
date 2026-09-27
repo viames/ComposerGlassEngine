@@ -2,7 +2,7 @@
 
 [Documentazione italiana](COMPOSER-UPSTREAM.it.md)
 
-ComposerGlass Engine `0.1.0` uses Composer `2.10.3` as its behavioral
+ComposerGlass Engine `0.2.x` uses Composer `2.10.3` as its behavioral
 compatibility baseline:
 
 - release date: `2026-08-27`;
@@ -41,9 +41,13 @@ For every baseline update:
 4. Add deterministic compatibility fixtures for relevant observable behavior.
 5. Compare correctness and performance with the same public or reproducible
    fixtures before and after the engine change.
-6. Update `ComposerUpstreamReference.current`, `COMPOSER-UPSTREAM.json`, this
+6. Review Composer's lockfile dumper and JSON writer changes. Regenerate the
+   official lockfile fixtures and require complete byte equality, not decoded
+   JSON equality, including escaping, key order, attribute presence, whitespace,
+   and the trailing newline.
+7. Update `ComposerUpstreamReference.current`, `COMPOSER-UPSTREAM.json`, this
    document, `COMPATIBILITY.md`, and `CHANGELOG.md` in the same pull request.
-7. Run `swift test` and the ComposerGlass application test suite.
+8. Run `swift test` and the ComposerGlass application test suite.
 
 Keeping the old baseline in Git history makes each engine release directly
 comparable with the exact Composer revision it targeted.

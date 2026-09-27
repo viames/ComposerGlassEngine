@@ -68,6 +68,108 @@ struct ComposerLockGeneratorTests {
     #expect(lock.pluginAPIVersion == "2.9.0")
   }
 
+  @Test("Only attributes written by official Composer reach package lock entries")
+  func filtersRepositoryOnlyAttributes() throws {
+    let manifestData = Data(#"{"require":{"vendor/app":"^1.0"}}"#.utf8)
+    let manifest = try ComposerManifest.decode(from: manifestData)
+    let package = try repositoryPackage(
+      "vendor/app",
+      "1.0.0",
+      additionalFields: [
+        "version_normalized": .string("1.0.0.0"),
+        "uid": .number(42),
+        "authors": .array([
+          .object([
+            "email": .string("team@example.com"),
+            "name": .string("Example Team"),
+          ])
+        ]),
+        "homepage": .string(""),
+        "keywords": .array([
+          .string("zeta"),
+          .string("Alpha"),
+          .string("beta"),
+        ]),
+        "scripts": .object(["test": .string("phpunit")]),
+      ]
+    )
+
+    let lock = try ComposerLockGenerator().generate(
+      manifest: manifest,
+      manifestData: manifestData,
+      resolution: try resolution([package])
+    )
+    let locked = try #require(lock.packages().first)
+
+    #expect(locked["version_normalized"] == nil)
+    #expect(locked["uid"] == nil)
+    #expect(locked["authors"] == package["authors"])
+    #expect(locked["homepage"] == nil)
+    #expect(
+      locked["keywords"]
+        == .array([.string("Alpha"), .string("beta"), .string("zeta")])
+    )
+    #expect(locked["scripts"] == package["scripts"])
+  }
+
+  @Test("Regeneration retains Composer ordering from the existing lock")
+  func preservesExistingComposerOrdering() throws {
+    let existingData = Data(
+      #"""
+      {
+          "content-hash": "0123456789abcdef0123456789abcdef",
+          "packages": [
+              {
+                  "name": "vendor/app",
+                  "version": "1.0.0",
+                  "autoload": {
+                      "files": ["src/functions.php"],
+                      "psr-4": {"Vendor\\App\\": "src/"}
+                  },
+                  "support": {
+                      "forum": "https://example.com/forum",
+                      "issues": "https://example.com/issues",
+                      "source": "https://example.com/source"
+                  }
+              }
+          ],
+          "packages-dev": []
+      }
+      """#.utf8
+    )
+    let existing = try ComposerLockFile.decode(from: existingData)
+    let manifestData = Data(#"{"require":{"vendor/app":"^1.0"}}"#.utf8)
+    let manifest = try ComposerManifest.decode(from: manifestData)
+    let package = try repositoryPackage(
+      "vendor/app",
+      "1.0.0",
+      additionalFields: [
+        "autoload": .object([
+          "psr-4": .object(["Vendor\\App\\": .string("src/")]),
+          "files": .array([.string("src/functions.php")]),
+        ]),
+        "support": .object([
+          "source": .string("https://example.com/source"),
+          "issues": .string("https://example.com/issues"),
+          "forum": .string("https://example.com/forum"),
+        ]),
+      ]
+    )
+
+    let regenerated = try ComposerLockGenerator().generate(
+      manifest: manifest,
+      manifestData: manifestData,
+      resolution: try resolution([package]),
+      preservingJSONKeyOrderFrom: existing
+    )
+    let json = String(decoding: try regenerated.encoded(), as: UTF8.self)
+
+    #expect(try #require(json.range(of: #""files""#)).lowerBound
+      < #require(json.range(of: #""psr-4""#)).lowerBound)
+    #expect(try #require(json.range(of: #""forum""#)).lowerBound
+      < #require(json.range(of: #""issues""#)).lowerBound)
+  }
+
   @Test("A missing package in a resolved runtime graph is rejected")
   func rejectsIncompleteResolution() throws {
     let manifestData = Data(#"{"require":{"vendor/missing":"*"}}"#.utf8)

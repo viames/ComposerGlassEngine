@@ -202,7 +202,11 @@ public struct ComposerLockFile: Equatable, Sendable {
 
   public func encoded(prettyPrinted: Bool = true) throws -> Data {
     if prettyPrinted {
-      return ComposerJSONWriter.data(.object(fields), rootOrder: ComposerJSONWriter.lockRootOrder)
+      return ComposerJSONWriter.data(
+        .object(fields),
+        rootOrder: ComposerJSONWriter.lockRootOrder,
+        keyOrders: jsonKeyOrders
+      )
     }
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.withoutEscapingSlashes]
@@ -212,6 +216,28 @@ public struct ComposerLockFile: Equatable, Sendable {
   public subscript(_ key: String) -> JSONValue? {
     get { fields[key] }
     set { fields[key] = newValue }
+  }
+
+  mutating func preserveJSONKeyOrder(from existing: ComposerLockFile) throws {
+    jsonKeyOrders = existing.jsonKeyOrders.filter { path, _ in
+      !ComposerLockSection.allCases.contains { section in
+        path == "/\(section.lockKey)" || path.hasPrefix("/\(section.lockKey)/")
+      }
+    }
+
+    for section in ComposerLockSection.allCases {
+      let existingPackages = try existing.packages(in: section)
+      let existingByName = Dictionary(
+        uniqueKeysWithValues: existingPackages.map { ($0.name, $0.jsonKeyOrders) }
+      )
+      for (index, package) in try packages(in: section).enumerated() {
+        guard let orders = existingByName[package.name] else { continue }
+        let prefix = "/\(section.lockKey)/\(index)"
+        for (path, order) in orders {
+          jsonKeyOrders[prefix + path] = order
+        }
+      }
+    }
   }
 
   private init(

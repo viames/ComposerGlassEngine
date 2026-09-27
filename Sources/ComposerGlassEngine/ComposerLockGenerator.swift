@@ -20,7 +20,8 @@ public struct ComposerLockGenerator: Sendable {
   public func generate(
     manifest: ComposerManifest,
     manifestData: Data,
-    resolution: ComposerResolutionResult
+    resolution: ComposerResolutionResult,
+    preservingJSONKeyOrderFrom existingLock: ComposerLockFile? = nil
   ) throws -> ComposerLockFile {
     let resolvedByName = Dictionary(
       uniqueKeysWithValues: resolution.packages.map { ($0.package.name, $0.package) }
@@ -82,12 +83,16 @@ public struct ComposerLockGenerator: Sendable {
       fields["platform-overrides"] = platform
     }
 
-    return try ComposerLockFile(
+    var lockFile = try ComposerLockFile(
       contentHash: ComposerContentHash.compute(from: manifestData),
       packages: runtime,
       developmentPackages: development,
       fields: fields
     )
+    if let existingLock {
+      try lockFile.preserveJSONKeyOrder(from: existingLock)
+    }
+    return lockFile
   }
 
   private func composerLockFields(
@@ -101,12 +106,21 @@ public struct ComposerLockGenerator: Sendable {
       "authors", "description", "homepage", "keywords", "repositories", "support",
       "funding", "abandoned", "transport-options",
     ])
-    return source.reduce(into: [:]) { result, item in
+    var fields = source.reduce(into: [String: JSONValue]()) { result, item in
       guard allowed.contains(item.key) else { return }
       if case .array(let values) = item.value, values.isEmpty { return }
       if case .object(let values) = item.value, values.isEmpty { return }
+      if item.key == "homepage", item.value.stringValue?.isEmpty == true { return }
       result[item.key] = item.value
     }
+    if case .array(let keywords)? = fields["keywords"],
+      keywords.allSatisfy({ $0.stringValue != nil })
+    {
+      fields["keywords"] = .array(
+        keywords.sorted { $0.stringValue! < $1.stringValue! }
+      )
+    }
+    return fields
   }
 
   private func reachablePackageNames(

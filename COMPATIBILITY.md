@@ -8,13 +8,33 @@ The current behavioral reference is Composer `2.10.3`, tag `2.10.3`, commit
 `COMPOSER-UPSTREAM.json` and exposed by `ComposerUpstreamReference.current`.
 See `COMPOSER-UPSTREAM.md` for the required comparison workflow.
 
+## Normative `composer.lock` serialization contract
+
+Within the supported feature set, an unchanged resolved dependency state must
+produce no `composer.lock` Git diff when switching between ComposerGlass Engine
+and the official baseline release. The complete serialized bytes are part of
+the compatibility surface; decoded JSON equality alone is not sufficient.
+
+The contract covers:
+
+- whitespace, indentation, and the final newline;
+- escaping of keys and values, including slashes and Unicode;
+- root, package, and nested object field order;
+- array order; and
+- exact attribute inclusion or omission.
+
+A format-only diff is a regression. Serialization changes require focused
+fixtures and a realistic official lockfile fixture that compare complete
+generated `Data` byte for byte. When the baseline changes, review Composer's
+lockfile dumper and JSON writer before regenerating those fixtures.
+
 ## Implemented
 
 | Area | Status |
 | --- | --- |
 | `composer.json` JSON preservation | Implemented |
 | Root requirement access and mutation | Implemented |
-| `composer.lock` JSON preservation | Implemented |
+| `composer.lock` byte-for-byte official serialization parity | Implemented |
 | Locked package inspection and deterministic ordering | Implemented |
 | Required lock field and duplicate validation | Implemented |
 | Composer-compatible `content-hash` | Implemented |

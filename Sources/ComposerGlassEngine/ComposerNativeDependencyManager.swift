@@ -231,7 +231,8 @@ public actor ComposerNativeDependencyManager {
     let lockFile = try lockGenerator.generate(
       manifest: manifest,
       manifestData: manifestData,
-      resolution: resolution
+      resolution: resolution,
+      preservingJSONKeyOrderFrom: originalLock
     )
     let lockData = try lockFile.encoded()
     if dryRun {

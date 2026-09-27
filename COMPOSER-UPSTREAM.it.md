@@ -1,6 +1,8 @@
 # Baseline upstream di Composer
 
-ComposerGlass Engine `0.1.0` utilizza Composer `2.10.3` come baseline per la
+[English documentation](COMPOSER-UPSTREAM.md)
+
+ComposerGlass Engine `0.2.x` utilizza Composer `2.10.3` come baseline per la
 compatibilità comportamentale:
 
 - data di pubblicazione: `2026-08-27`;
@@ -42,10 +44,14 @@ Per ogni aggiornamento della baseline:
 4. Aggiungi fixture deterministiche per i comportamenti osservabili pertinenti.
 5. Confronta correttezza e prestazioni con le stesse fixture pubbliche o
    riproducibili, prima e dopo la modifica dell’engine.
-6. Aggiorna `ComposerUpstreamReference.current`, `COMPOSER-UPSTREAM.json`,
+6. Esamina le modifiche al dumper del lockfile e allo scrittore JSON di
+   Composer. Rigenera le fixture ufficiali e richiedi l’uguaglianza completa dei
+   byte, non soltanto del JSON decodificato, compresi escaping, ordine delle
+   chiavi, presenza degli attributi, spaziatura e newline finale.
+7. Aggiorna `ComposerUpstreamReference.current`, `COMPOSER-UPSTREAM.json`,
    questo documento, `COMPATIBILITY.md` e `CHANGELOG.md` nella stessa pull
    request.
-7. Esegui `swift test` e la suite di test dell’applicazione ComposerGlass.
+8. Esegui `swift test` e la suite di test dell’applicazione ComposerGlass.
 
 La conservazione della baseline precedente nella cronologia Git rende ogni
 versione dell’engine direttamente confrontabile con l’esatta revisione di

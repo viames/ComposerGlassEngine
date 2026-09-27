@@ -20,47 +20,48 @@ resolve, and install PHP dependencies without launching PHP, Composer, a shell,
 or another executable. The initial `0.x` releases intentionally implement a
 safe subset of Composer and never execute downloaded package code.
 
-## Current capabilities
+## Documentation
 
-- Structure-preserving decoding and encoding of `composer.json`, including
-  unknown fields.
-- Typed, structure-preserving `composer.lock` decoding and deterministic
-  encoding.
-- Composer-compatible `content-hash` generation and lock freshness checks.
-- Deterministic locked-package ordering and duplicate validation.
-- Typed access to root requirements and common manifest metadata.
-- Composer-style numeric version parsing and stability comparison.
-- Exact, comparison, caret, tilde, wildcard, hyphen, AND, and OR constraints.
-- Asynchronous Composer 2 repository discovery and package metadata loading.
-- Expansion of `composer/2.0` minified metadata, conditional HTTP caching, and
-  development-version endpoints.
-- HTTPS-only repository and redirect validation in the App Store-safe client.
-- Deterministic highest-compatible dependency resolution with transitive
-  requirements and backtracking.
-- Branch aliases, development versions, `conflict`, `replace`, `provide`, and
-  virtual-package provider discovery.
-- PHP, extension, library, and Composer platform-package validation.
-- `minimum-stability`, root stability flags, and `prefer-stable` selection.
-- Structured resolution problems with contributing constraints and available
-  repository versions.
-- Asynchronous HTTPS-only ZIP downloads with in-flight size enforcement.
-- Persistent package archive caching with SHA-256 validation and optional
-  Composer SHA-1 verification.
-- Native stored/DEFLATE ZIP extraction with CRC-32 validation, path containment,
-  expansion limits, and rollback on failure.
-- Deterministic materialization of new vendor trees with installed-package
-  metadata and all-or-nothing cleanup on failure.
-- PSR-0, PSR-4, classmap, and files autoload generation, plus deterministic
-  `vendor/bin` proxy generation.
-- Transactional active-vendor replacement with journaled recovery and rollback.
-- Deterministic lock generation and native update, selected update, `require`,
-  and `remove` workflows with project-file backups.
-- Native `install`, `validate`, `show`, `outdated`, `audit`, and
-  `dump-autoload` services.
-- A dependency-free Swift Package suitable for static linking.
+| Topic | Canonical document |
+| --- | --- |
+| API overview and examples | This README |
+| Supported features and intentional exclusions | [COMPATIBILITY.md](COMPATIBILITY.md) |
+| Composer reference version and upgrade workflow | [COMPOSER-UPSTREAM.md](COMPOSER-UPSTREAM.md) |
+| Contribution requirements | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Security boundaries and private reporting | [SECURITY.md](SECURITY.md) |
+| Release history | [CHANGELOG.md](CHANGELOG.md) |
 
-See [COMPATIBILITY.md](COMPATIBILITY.md) before using the package for project
-modifications.
+## Supported surface
+
+- **Project files:** structure-preserving `composer.json` and `composer.lock`,
+  Composer-compatible `content-hash`, byte-identical lockfile serialization,
+  validation, and duplicate detection.
+- **Resolution:** Composer 2 repository metadata, numeric and development
+  versions, common constraint operators, stability policies, transitive
+  backtracking, aliases, conflicts, replacements, providers, and platform
+  packages.
+- **Transport and extraction:** HTTPS-only metadata and distribution access,
+  conditional caching, SHA-1/SHA-256 verification, bounded ZIP downloads, and
+  native stored/DEFLATE extraction with path, collision, CRC-32, and expansion
+  protection.
+- **Generated output:** deterministic vendor trees, installed-package metadata,
+  PSR-0, PSR-4, classmap and files autoloading, plus `vendor/bin` proxies.
+- **Operations and recovery:** native install, update, selected update,
+  `require`, `remove`, `validate`, `show`, `outdated`, `audit`, and
+  `dump-autoload`, with external transaction state, backups, crash recovery,
+  and rollback.
+
+The package has no runtime dependencies and is suitable for static linking.
+Review [COMPATIBILITY.md](COMPATIBILITY.md) before modifying a project.
+
+## Lockfile byte compatibility
+
+For the same resolved dependency state, every supported operation must produce
+the exact bytes written by the official baseline Composer release. Semantic
+JSON equality is insufficient because whitespace, escaping, ordering, or field
+presence alone can create noisy Git changes. The complete normative contract
+and test requirements live in [COMPATIBILITY.md](COMPATIBILITY.md); baseline
+updates follow [COMPOSER-UPSTREAM.md](COMPOSER-UPSTREAM.md).
 
 ## Requirements
 

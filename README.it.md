@@ -1,10 +1,12 @@
 # ComposerGlass Engine
 
+[English documentation](README.md)
+
 ComposerGlass Engine è un motore indipendente e non ufficiale, scritto in
 Swift e progettato per essere compatibile con Composer. Non è affiliato al
 progetto Composer né approvato dai suoi responsabili.
 
-La baseline comportamentale attuale è Composer `2.10.3`, tag `2.10.3`, commit
+La baseline comportamentale attuale della serie `0.2.x` è Composer `2.10.3`, tag `2.10.3`, commit
 `f0de0bf90226853b841672f086d8b58b02332504`. Consulta
 [COMPOSER-UPSTREAM.it.md](COMPOSER-UPSTREAM.it.md) per il riferimento
 machine-readable e la procedura di confronto con le versioni future.
@@ -15,57 +17,45 @@ una shell o un altro eseguibile. Le prime versioni `0.x` implementano
 intenzionalmente un sottoinsieme sicuro di Composer e non eseguono mai il
 codice dei pacchetti scaricati.
 
-## Funzionalità attuali
+## Documentazione
 
-- Decodifica e codifica strutturale di `composer.json`, con conservazione dei
-  campi sconosciuti.
-- Decodifica tipizzata e strutturale di `composer.lock`, con codifica
-  deterministica.
-- Generazione del `content-hash` compatibile con Composer e verifica
-  dell'allineamento tra manifesto e lockfile.
-- Ordinamento deterministico dei pacchetti bloccati e rilevamento dei
-  duplicati.
-- Accesso tipizzato ai requisiti principali e ai metadati comuni del manifesto.
-- Interpretazione delle versioni numeriche in stile Composer e confronto del
-  livello di stabilità.
-- Vincoli esatti, comparativi, caret, tilde, wildcard, intervallo, AND e OR.
-- Individuazione asincrona dei repository Composer 2 e caricamento dei metadati
-  dei pacchetti.
-- Espansione dei metadati minificati `composer/2.0`, cache HTTP condizionale e
-  caricamento delle versioni di sviluppo.
-- Validazione HTTPS dei repository e dei reindirizzamenti nel client conforme
-  al profilo di sicurezza per App Store.
-- Risoluzione deterministica della versione compatibile più alta, con requisiti
-  transitivi e backtracking.
-- Alias dei rami, versioni di sviluppo, `conflict`, `replace`, `provide` e
-  individuazione dei fornitori di pacchetti virtuali.
-- Validazione dei pacchetti virtuali della piattaforma per PHP, estensioni,
-  librerie e Composer.
-- Supporto di `minimum-stability`, dei flag di stabilità dichiarati nel
-  progetto principale e di `prefer-stable`.
-- Descrizione strutturata degli errori di risoluzione, con vincoli coinvolti e
-  versioni disponibili nel repository.
-- Download asincrono e limitato agli URL HTTPS degli archivi ZIP, con controllo
-  della dimensione durante il trasferimento.
-- Cache persistente degli archivi, con verifica SHA-256 e controllo facoltativo
-  del checksum SHA-1 fornito dai repository Composer.
-- Estrazione nativa degli archivi ZIP con voci memorizzate o DEFLATE, verifica
-  CRC-32, contenimento dei percorsi, limiti di espansione e rollback in caso di
-  errore.
-- Creazione deterministica di nuovi alberi `vendor`, con metadati dei pacchetti
-  installati e rimozione completa della destinazione in caso di errore.
-- Generazione dell’autoload PSR-0, PSR-4, classmap e files, oltre ai proxy
-  deterministici in `vendor/bin`.
-- Sostituzione transazionale della directory `vendor`, con journal di recupero
-  e rollback.
-- Generazione deterministica del lockfile e flussi nativi per aggiornamento,
-  aggiornamento selettivo, `require` e `remove`, con backup dei file di progetto.
-- Servizi nativi per `install`, `validate`, `show`, `outdated`, `audit` e
-  `dump-autoload`.
-- Swift Package privo di dipendenze, adatto al collegamento statico.
+| Argomento | Documento autorevole |
+| --- | --- |
+| Panoramica API ed esempi | Questo README |
+| Funzionalità supportate ed esclusioni | [COMPATIBILITY.md](COMPATIBILITY.md) |
+| Versione Composer di riferimento e aggiornamenti | [COMPOSER-UPSTREAM.it.md](COMPOSER-UPSTREAM.it.md) |
+| Requisiti per contribuire | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Perimetro di sicurezza e segnalazioni private | [SECURITY.md](SECURITY.md) |
+| Cronologia delle versioni | [CHANGELOG.md](CHANGELOG.md) |
 
-Prima di utilizzare il pacchetto per modificare un progetto, consulta
-[COMPATIBILITY.md](COMPATIBILITY.md).
+## Perimetro supportato
+
+- **File di progetto:** conservazione strutturale di `composer.json` e
+  `composer.lock`, `content-hash` compatibile, serializzazione byte-identica,
+  validazione e rilevamento dei duplicati.
+- **Risoluzione:** metadati Composer 2, versioni numeriche e di sviluppo,
+  operatori di vincolo comuni, stabilità, backtracking transitivo, alias,
+  conflitti, sostituzioni, provider e pacchetti della piattaforma.
+- **Trasporto ed estrazione:** accesso esclusivamente HTTPS, cache condizionale,
+  verifiche SHA-1/SHA-256, download ZIP limitati ed estrazione nativa
+  stored/DEFLATE con protezioni per percorsi, collisioni, CRC-32 ed espansione.
+- **Output generato:** alberi `vendor` deterministici, metadati dei pacchetti,
+  autoload PSR-0, PSR-4, classmap e files, oltre ai proxy `vendor/bin`.
+- **Operazioni e recupero:** installazione, aggiornamento completo o selettivo,
+  `require`, `remove`, `validate`, `show`, `outdated`, `audit` e
+  `dump-autoload`, con stato transazionale esterno, backup, recupero e rollback.
+
+Il pacchetto non ha dipendenze runtime ed è adatto al collegamento statico.
+Consulta [COMPATIBILITY.md](COMPATIBILITY.md) prima di modificare un progetto.
+
+## Compatibilità byte per byte del lockfile
+
+A parità di dipendenze risolte, ogni operazione supportata deve produrre gli
+stessi byte della release ufficiale di Composer usata come baseline. La sola
+uguaglianza semantica del JSON non basta: differenze di spaziatura, escaping,
+ordine o presenza dei campi generano rumore in Git. Il contratto completo e i
+test obbligatori sono in [COMPATIBILITY.md](COMPATIBILITY.md); gli aggiornamenti
+della baseline seguono [COMPOSER-UPSTREAM.it.md](COMPOSER-UPSTREAM.it.md).
 
 ## Requisiti
 

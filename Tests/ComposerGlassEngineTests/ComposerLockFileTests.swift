@@ -58,6 +58,122 @@ struct ComposerLockFileTests {
     #expect(try lockFile.packages().map(\.name) == ["vendor/a", "vendor/b"])
   }
 
+  @Test("Official nested attribute order survives a byte-identical round trip")
+  func preservesOfficialNestedAttributeOrder() throws {
+    let source = Data(
+      #"""
+      {
+          "content-hash": "0123456789abcdef0123456789abcdef",
+          "packages": [
+              {
+                  "name": "vendor/package",
+                  "version": "1.2.3",
+                  "extra": {
+                      "component": {
+                          "id": "package",
+                          "path": "Package",
+                          "entry": "README.md",
+                          "target": "vendor/package.git"
+                      }
+                  },
+                  "autoload": {
+                      "files": [
+                          "src/functions.php"
+                      ],
+                      "psr-4": {
+                          "Vendor\\Package\\": "src/"
+                      }
+                  },
+                  "support": {
+                      "forum": "https://example.com/forum",
+                      "issues": "https://example.com/issues",
+                      "source": "https://example.com/source"
+                  }
+              }
+          ],
+          "packages-dev": []
+      }
+
+      """#.utf8
+    )
+
+    let lockFile = try ComposerLockFile.decode(from: source)
+
+    #expect(try lockFile.encoded() == source)
+  }
+
+  @Test("Encoding matches Composer key escaping and package field order")
+  func matchesComposerJSONLayout() throws {
+    let package = try ComposerLockedPackage(
+      name: "vendor/package",
+      version: "1.2.3",
+      fields: [
+        "require-dev": .object(["phpunit/phpunit": .string("^12.0")]),
+        "time": .string("2026-09-27T00:00:00+00:00"),
+        "type": .string("library"),
+        "autoload": .object([
+          "psr-4": .object(["Vendor\\Package\\": .string("src/")])
+        ]),
+        "authors": .array([
+          .object([
+            "email": .string("team@example.com"),
+            "name": .string("Example Team"),
+          ])
+        ]),
+        "funding": .array([
+          .object([
+            "type": .string("github"),
+            "url": .string("https://github.com/sponsors/example"),
+          ])
+        ]),
+      ]
+    )
+    let lockFile = try ComposerLockFile(
+      contentHash: "0123456789abcdef0123456789abcdef",
+      packages: [package]
+    )
+
+    let expected = Data(
+      #"""
+      {
+          "content-hash": "0123456789abcdef0123456789abcdef",
+          "packages": [
+              {
+                  "name": "vendor/package",
+                  "version": "1.2.3",
+                  "require-dev": {
+                      "phpunit/phpunit": "^12.0"
+                  },
+                  "type": "library",
+                  "autoload": {
+                      "psr-4": {
+                          "Vendor\\Package\\": "src/"
+                      }
+                  },
+                  "authors": [
+                      {
+                          "name": "Example Team",
+                          "email": "team@example.com"
+                      }
+                  ],
+                  "funding": [
+                      {
+                          "url": "https://github.com/sponsors/example",
+                          "type": "github"
+                      }
+                  ],
+                  "time": "2026-09-27T00:00:00+00:00"
+              }
+          ],
+          "packages-dev": []
+      }
+
+      """#.utf8
+    )
+
+    #expect(try lockFile.encoded() == expected)
+  }
+
   @Test("Duplicate packages are rejected")
   func rejectsDuplicatePackages() throws {
     let first = try ComposerLockedPackage(name: "vendor/package", version: "1.0.0")

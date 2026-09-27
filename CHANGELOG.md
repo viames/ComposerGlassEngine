@@ -7,7 +7,13 @@ versions may contain source-breaking API improvements.
 
 ## Unreleased
 
-No changes yet.
+### Changed
+
+- `composer.lock` generation now matches official Composer serialization byte
+  for byte for the supported feature set, including key escaping, package and
+  nested attribute order, exact field presence, keyword sorting, whitespace,
+  and the trailing newline. Existing official nested key order is preserved
+  during regeneration to prevent format-only Git diffs.
 
 ## 0.2.0 — 2026-09-25
 
